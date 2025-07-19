@@ -4,7 +4,6 @@ from queue import Queue
 
 
 
-
 class Renderer:
     def __init__(self, a: list[float], b: list[float], filename: str) -> None:
         self.a = a
