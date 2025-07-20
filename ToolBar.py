@@ -111,8 +111,8 @@ class Toolbar(QWidget):
 
         # Animate a
         animate_layout_a = QHBoxLayout()
-        self._from = QLineEdit("1", self)
-        self._to = QLineEdit("2", self)
+        self._from = QLineEdit("0.53", self)
+        self._to = QLineEdit("0.53", self)
         self._from.setValidator(float_validator)
         self._to.setValidator(float_validator)
         animate_layout_a.addWidget(QLabel("(a) From:"))
@@ -336,6 +336,7 @@ class Toolbar(QWidget):
             self.max_frames = frames
 
     def next_frame(self):
+        # finished
         if self.frame_index >= len(self.values_a):
             self.writer.save()
             self.animation_timer.stop()
@@ -347,6 +348,7 @@ class Toolbar(QWidget):
             print(f"Total: {min_}m {sec_:.0f}s — Per frame: {per_frame:.2f}s")
             return
 
+        # calc
         a = self.values_a[self.frame_index]
         b = self.values_b[self.frame_index]
         res = self.animation_params["res"]

@@ -18,7 +18,7 @@ class Renderer:
         self.percentile = percentile
 
     def render_all_frames(self):
-            buffer_size = 50
+            buffer_size = 100
             batches = math.ceil(len(self.a) / buffer_size)
             for i in range(0, len(self.a), buffer_size):
                 t1 = time()
