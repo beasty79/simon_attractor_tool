@@ -1,6 +1,6 @@
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QLineEdit, QPushButton, QLabel,
-    QSizePolicy, QHBoxLayout, QFrame, QComboBox, QApplication
+    QSizePolicy, QHBoxLayout, QFrame, QComboBox, QApplication, QCheckBox, QFileDialog
 )
 import matplotlib.pyplot as plt
 from PyQt6.QtCore import QTimer, Qt, QRegularExpression
@@ -10,6 +10,7 @@ from numpy.typing import NDArray
 from PyQt6.QtGui import QRegularExpressionValidator, QIntValidator
 if 0!=0: from app import MainWindow
 from time import time
+from effecient_render import Renderer
 
 # cmap
 top_colormaps = [
@@ -42,7 +43,8 @@ class Toolbar(QWidget):
         self.values_a = []
         self.values_b = []
         self.animation_params = {}
-        self.colors = None
+        self.colors: NDArray | None = None
+        self.renderer = None
 
         self.init_ui()
 
@@ -160,6 +162,17 @@ class Toolbar(QWidget):
         self.video_time_label = QLabel("")
         layout.addWidget(self.video_time_label)
 
+
+        self.performance_render = QCheckBox("Performance")
+        self.live_render = QCheckBox("Live")
+        check_box_layout = QHBoxLayout()
+        check_box_layout.addWidget(self.performance_render)
+        check_box_layout.addWidget(self.live_render)
+        layout.addLayout(check_box_layout)
+        self.performance_render.setChecked(False)
+        self.live_render.setChecked(True)
+        self.performance_render.checkStateChanged.connect(lambda: self.live_render.setChecked(False) if self.performance_render.isChecked() else self.live_render.setChecked(True))
+        self.live_render.checkStateChanged.connect(lambda: self.performance_render.setChecked(False) if self.live_render.isChecked() else self.performance_render.setChecked(True))
         # Start Animation
         self.start_animation = QPushButton("Start Animation")
         self.start_animation.clicked.connect(self.animate)
@@ -223,10 +236,6 @@ class Toolbar(QWidget):
         self.cmap_box.setCurrentIndex(index if index > 0 else 0)
 
     def update_(self):
-        # self._from.setText(self.input_a.text())
-        # self._from_b.setText(self.input_b.text())
-        # self._to.setText(self.input_a.text())
-        # self._to_b.setText(self.input_b.text())
         self.update_render()
 
     def update_render(self):
@@ -284,43 +293,67 @@ class Toolbar(QWidget):
             res = int(self.input_res.text())
             n = int(self.input_n.text())
             fps = int(self.fps_input.text())
+            percentile = float(self.input_percentile.text())
+            use_performance_mode: bool = self.performance_render.isChecked()
         except Exception as e:
             print("Invalid input:", e)
             return
 
         self.rendering = True
-        fname = make_filename(a_1, a_2, b_1, b_2, extension="mp4")
-        self.writer = VideoFileWriter(fname, fps=fps)
-
+        # fname = make_filename(a_1, a_2, b_1, b_2, extension="mp4")
+        fname = get_save_filename(self)
 
         self.values_a = np.linspace(a_1, a_2, frames)
         self.values_b = np.linspace(b_1, b_2, frames)
-        self.frame_index = 0
-        self.animation_params = {"res": res, "n": n}
+
 
         cmap = plt.get_cmap(self.cmap_box.currentText())
         linear = np.linspace(0, 1, 256)
         self.colors = cmap(linear)
 
+        if use_performance_mode:
+            t1 = time()
+            self.renderer = Renderer(self.values_a, self.values_b, fname, fps, self.colors, res, n, percentile)
+            self.renderer.render_all_frames()
+            elapsed = time() - t1
 
-        frame_delay_ms = int(1000 / 60)
-        self.animation_timer.start(frame_delay_ms)
-        self.max_frames = frames
+            # Format time nicely
+            minutes = int(elapsed // 60)
+            seconds = elapsed % 60
+
+            # Total number of frames rendered is based on length of values_a
+            frame_count = len(self.values_a)
+            per_frame = round(elapsed / frame_count, 2)
+            print(f"Render of {frame_count} frames took {minutes}:{seconds:.0f}s = {per_frame}s per frame")
+
+        else:
+            self.t1 = time()
+            self.writer = VideoFileWriter(fname, fps=fps)
+            self.frame_index = 0
+            self.animation_params = {"res": res, "n": n}
+            frame_delay_ms = int(1000 / 60)
+            self.animation_timer.start(frame_delay_ms)
+            self.max_frames = frames
 
     def next_frame(self):
         if self.frame_index >= len(self.values_a):
             self.writer.save()
             self.animation_timer.stop()
             self.rendering = False
+            needed = time() - self.t1
+            min_ = int(needed // 60)
+            sec_ = needed - 60 * min_
+            per_frame = needed / int(self.input_n.text())
+            print(f"Total: {min_}m {sec_:.0f}s — Per frame: {per_frame:.2f}s")
             return
-
 
         a = self.values_a[self.frame_index]
         b = self.values_b[self.frame_index]
         res = self.animation_params["res"]
         n = self.animation_params["n"]
-
-        self.parent_.new_render(res, a, b, n, colors=self.colors)
+        if self.colors is None:
+            return
+        self.parent_.new_render(res, a, b, n, self.percentile, self.colors)
         self.frame_index += 1
 
 def make_filename(a_1, a_2, b_1, b_2, extension="mp4"):
@@ -332,3 +365,13 @@ def make_filename(a_1, a_2, b_1, b_2, extension="mp4"):
 
     fname = "_".join(parts) + f".{extension}"
     return fname
+
+
+def get_save_filename(cls):
+    file_path, _ = QFileDialog.getSaveFileName(
+        parent=cls,
+        caption="Save Video File",
+        filter="MP4 files (*.mp4);;All Files (*)",
+        directory="render.mp4"
+    )
+    return file_path

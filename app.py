@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 from ToolBar import Toolbar
 from PyQt6.QtCore import Qt
 import numpy as np
+from numpy.typing import NDArray
 from simon import render
 from PyQt6.QtGui import QKeyEvent
 
@@ -57,13 +58,13 @@ class MainWindow(QMainWindow):
         central_widget.updateGeometry()
 
 
-    def new_render(self, res: int, a: float, b: float, n: int, percentile: float, colors=None):
+    def new_render(self, res: int, a: float, b: float, n: int, percentile: float, colors: NDArray):
+        """Renders a single frame and displys it in the UI"""
         img = render(colors, resolution=res, a=a, b=b, n=n, percentile=percentile)
         self.canvas.display_image(img)
         if self.toolbar.rendering:
             self.toolbar.writer.add_frame(img)
         self.toolbar.update_display(self.toolbar.frame_index, a, b)
-
 
     def keyPressEvent(self, a0: QKeyEvent | None):
         if a0 is None:
