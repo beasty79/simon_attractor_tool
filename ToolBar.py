@@ -79,7 +79,7 @@ class Toolbar(QWidget):
 
         # Input: Percentile
         para_4 = QHBoxLayout()
-        self.input_percentile = QLineEdit("95", self)
+        self.input_percentile = QLineEdit("99", self)
         self.input_percentile.setValidator(float_validator)
         para_4.addWidget(QLabel("Percentile (1-100):"))
         para_4.addWidget(self.input_percentile)
@@ -93,18 +93,22 @@ class Toolbar(QWidget):
         para_4.addWidget(self.input_res)
         layout.addLayout(para_4)
 
-        # Separator
-        separator = QFrame()
-        separator.setFrameShape(QFrame.Shape.HLine)
-        separator.setFrameShadow(QFrame.Shadow.Sunken)
-        separator.setLineWidth(1)
-        layout.addWidget(separator)
+        self.invert_checkbox = QCheckBox("Invert Color")
+        layout.addWidget(self.invert_checkbox)
+        self.invert_checkbox.checkStateChanged.connect(lambda: self.update_render())
 
         # colormap
         self.cmap_box = QComboBox(self)
         self.cmap_box.addItems(top_colormaps)
         self.cmap_box.currentTextChanged.connect(lambda: self.render_single_frame())
         layout.addWidget(self.cmap_box)
+
+        # Separator
+        separator = QFrame()
+        separator.setFrameShape(QFrame.Shape.HLine)
+        separator.setFrameShadow(QFrame.Shadow.Sunken)
+        separator.setLineWidth(1)
+        layout.addWidget(separator)
 
         # Animation Section
         layout.addWidget(QLabel("Animate: "))
@@ -161,7 +165,6 @@ class Toolbar(QWidget):
         # video time label
         self.video_time_label = QLabel("")
         layout.addWidget(self.video_time_label)
-
 
         self.performance_render = QCheckBox("Performance")
         self.live_render = QCheckBox("Live")
@@ -256,6 +259,10 @@ class Toolbar(QWidget):
         return int(self.input_n.text())
 
     @property
+    def invert(self) -> bool:
+        return self.invert_checkbox.isChecked()
+
+    @property
     def percentile(self) -> float:
         x = float(self.input_percentile.text())
         if x > 100:
@@ -278,9 +285,11 @@ class Toolbar(QWidget):
         t1 = time()
         QApplication.setOverrideCursor(Qt.CursorShape.BusyCursor)
         colors = self.get_colors()
+        if self.invert:
+            colors = colors[::-1]
         self.parent_.new_render(self.resolution, self.a, self.b, self.iterations, colors=colors, percentile=self.percentile)
         QApplication.restoreOverrideCursor()
-        time_needed = time()-t1
+        time_needed = time() - t1
         self.last_frame_sec.setText(f"Last Rendered Frame took {time_needed:.2f}s")
 
     def animate(self):
@@ -294,6 +303,7 @@ class Toolbar(QWidget):
             n = int(self.input_n.text())
             fps = int(self.fps_input.text())
             percentile = float(self.input_percentile.text())
+            invert = self.invert_checkbox.isChecked()
             use_performance_mode: bool = self.performance_render.isChecked()
         except Exception as e:
             print("Invalid input:", e)
@@ -310,30 +320,43 @@ class Toolbar(QWidget):
         cmap = plt.get_cmap(self.cmap_box.currentText())
         linear = np.linspace(0, 1, 256)
         self.colors = cmap(linear)
+        if invert:
+            self.colors = self.colors[::-1]
 
+        # if use_performance_mode:
+        #     t1 = time()
+        #     self.renderer = Renderer(self.values_a, self.values_b, fname, fps, self.colors, res, n, percentile)
+        #     self.renderer.render_all_frames()
+        #     elapsed = time() - t1
+
+        #     # Format time nicely
+        #     minutes = int(elapsed // 60)
+        #     seconds = elapsed % 60
+
+        #     # Total number of frames rendered is based on length of values_a
+        #     frame_count = len(self.values_a)
+        #     per_frame = round(elapsed / frame_count, 2)
+        #     print(f"Render of {frame_count} frames took {minutes}:{seconds:.0f}s = {per_frame}s per frame")
+        self.writer = VideoFileWriter(fname, fps=fps)
         if use_performance_mode:
-            t1 = time()
-            self.renderer = Renderer(self.values_a, self.values_b, fname, fps, self.colors, res, n, percentile)
-            self.renderer.render_all_frames()
-            elapsed = time() - t1
-
-            # Format time nicely
-            minutes = int(elapsed // 60)
-            seconds = elapsed % 60
-
-            # Total number of frames rendered is based on length of values_a
-            frame_count = len(self.values_a)
-            per_frame = round(elapsed / frame_count, 2)
-            print(f"Render of {frame_count} frames took {minutes}:{seconds:.0f}s = {per_frame}s per frame")
+            self.worker = RenderWorker(self.values_a, self.values_b, fname, fps, self.colors, res, n, percentile)
+            self.worker.finished.connect(self.on_render_done)
+            self.worker.start()
 
         else:
             self.t1 = time()
-            self.writer = VideoFileWriter(fname, fps=fps)
             self.frame_index = 0
             self.animation_params = {"res": res, "n": n}
             frame_delay_ms = int(1000 / 60)
             self.animation_timer.start(frame_delay_ms)
             self.max_frames = frames
+
+    def on_render_done(self, elapsed, frame_count):
+        minutes = int(elapsed // 60)
+        seconds = elapsed % 60
+        per_frame = round(elapsed / frame_count, 2)
+        print(f"Render of {frame_count} frames took {minutes}:{seconds:.0f}s = {per_frame}s per frame")
+
 
     def next_frame(self):
         # finished
@@ -377,3 +400,30 @@ def get_save_filename(cls):
         directory="render.mp4"
     )
     return file_path
+
+
+from PyQt6.QtCore import QThread, pyqtSignal
+from time import time
+
+# Step 1: Create a Worker thread class
+class RenderWorker(QThread):
+    finished = pyqtSignal(float, int)
+
+    def __init__(self, values_a, values_b, fname, fps, colors, res, n, percentile):
+        super().__init__()
+        self.values_a = values_a
+        self.values_b = values_b
+        self.fname = fname
+        self.fps = fps
+        self.colors = colors
+        self.res = res
+        self.n = n
+        self.percentile = percentile
+
+    def run(self):
+        t1 = time()
+        renderer = Renderer(self.values_a, self.values_b, self.fname, self.fps, self.colors, self.res, self.n, self.percentile)
+        renderer.render_all_frames()
+        elapsed = time() - t1
+        frame_count = len(self.values_a)
+        self.finished.emit(elapsed, frame_count)

@@ -2,9 +2,17 @@ import multiprocessing
 from simon import render
 from VideoWriter import VideoFileWriter
 from PyQt6.QtWidgets import QApplication
+from PyQt6.QtCore import QObject, QThread, pyqtSignal
 from numpy.typing import NDArray
 import math
 from time import time
+
+class Worker(QThread):
+    progress = pyqtSignal(str)
+
+    def run(self):
+        ...
+
 
 class Renderer:
     def __init__(self, a: NDArray, b: NDArray, filename: str, fps: int, colors, resolution: int, iters: int, percentile: float) -> None:
