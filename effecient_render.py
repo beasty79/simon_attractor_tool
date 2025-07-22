@@ -1,11 +1,11 @@
-import multiprocessing
-from simon import render, render_raw, to_img
-from VideoWriter import VideoFileWriter
+from PyQt6.QtCore import QThread, pyqtSignal
 from PyQt6.QtWidgets import QApplication
-from PyQt6.QtCore import QObject, QThread, pyqtSignal
+from VideoWriter import VideoFileWriter
+from simon import render_raw, to_img
 from numpy.typing import NDArray
-import math
+import multiprocessing
 from time import time
+import math
 
 class Worker(QThread):
     progress = pyqtSignal(str)

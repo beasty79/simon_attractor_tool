@@ -1,15 +1,13 @@
-import sys
 from PyQt6.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QWidget, QHBoxLayout
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 from PyQt6.QtWidgets import QSizePolicy
-import matplotlib.pyplot as plt
 from matplotlib.figure import Figure
-from ToolBar import Toolbar
-from PyQt6.QtCore import Qt
-import numpy as np
-from numpy.typing import NDArray
-from simon import render
 from PyQt6.QtGui import QKeyEvent
+from numpy.typing import NDArray
+from PyQt6.QtCore import Qt
+from ToolBar import Toolbar
+from simon import render
+import sys
 
 
 class MplCanvas(FigureCanvas):

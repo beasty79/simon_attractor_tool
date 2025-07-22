@@ -1,7 +1,7 @@
-import cv2
-import numpy as np
 from PyQt6.QtWidgets import QApplication
 from PyQt6.QtCore import Qt
+import numpy as np
+import cv2
 
 
 class VideoFileWriter:

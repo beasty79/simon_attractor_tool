@@ -1,14 +1,11 @@
-import matplotlib.pyplot as plt
-from scipy.ndimage import zoom
+from numpy.typing import NDArray
+from numba import njit, prange
 from functools import wraps
 from math import sin, cos
 from numpy import ndarray
-from numba import njit, prange
+from typing import Any
 import numpy as np
 import timeit
-import sys
-from typing import Any
-from numpy.typing import NDArray
 
 
 def timer(func):

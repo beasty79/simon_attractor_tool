@@ -2,21 +2,22 @@ from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QLineEdit, QPushButton, QLabel,
     QSizePolicy, QHBoxLayout, QFrame, QComboBox, QApplication, QCheckBox, QFileDialog
 )
-import matplotlib.pyplot as plt
-from PyQt6.QtCore import QTimer, Qt, QRegularExpression
-import numpy as np
-from VideoWriter import VideoFileWriter
-from numpy.typing import NDArray
 from PyQt6.QtGui import QRegularExpressionValidator, QIntValidator
-if 0!=0: from app import MainWindow
-from time import time
+from PyQt6.QtCore import QTimer, Qt, QRegularExpression
+from VideoWriter import VideoFileWriter
 from effecient_render import Renderer
+if 0!=0: from app import MainWindow
+from numpy.typing import NDArray
+import matplotlib.pyplot as plt
+from time import time
+import numpy as np
 
 # cmap
 top_colormaps = [
-    'viridis', 'plasma','inferno','magma','cividis','turbo','coolwarm','Spectral','RdYlBu','RdYlGn','PiYG',
-    'PRGn', 'BrBG', 'PuOr', 'Set1', 'Set2', 'Set3', 'Paired', 'Pastel1', 'Pastel2', 'tab10', 'tab20', 'cubehelix', 'nipy_spectral', \
-    'gist_rainbow', 'gnuplot', 'twilight', 'twilight_shifted', 'terrain', 'ocean'
+    'viridis', 'gnuplot','plasma','inferno','magma','cividis', 'terrain'
+    'turbo','coolwarm','Spectral','RdYlBu','RdYlGn','PiYG',
+    'PRGn', 'BrBG', 'PuOr', 'Set1', 'Set2', 'Set3', 'Paired', 'Pastel1', 'Pastel2', 'tab10', 'tab20', 'cubehelix', 'nipy_spectral',
+    'twilight', 'twilight_shifted', 'ocean'
 ]
 
 
