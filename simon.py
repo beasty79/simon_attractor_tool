@@ -7,6 +7,7 @@ from numba import njit, prange
 import numpy as np
 import timeit
 import sys
+from typing import Any
 from numpy.typing import NDArray
 
 
@@ -64,6 +65,40 @@ def render(colors: np.typing.NDArray[np.float32], resolution: int, a: float, b: 
     values = (h_normalized * 255).astype(int)
     img = (colors[values] * 255).astype(np.uint8)
     return img
+
+
+def render_raw(resolution: int, a: float, b: float, n: int, percentile: float, current_percentile_max: int) -> tuple[NDArray[np.float32], Any]:
+    """
+    same as render but it doesnt apply the colormaps yet
+    Computes a normalized 2D histogram of the Simon Attractor iterations.
+    Args:
+        resolution (int): The resolution of the output grid (res x res). Be cautious: runtime ~ O(n^2).
+        a (float): Parameter 'a' for the Simon Attractor.
+        b (float): Parameter 'b' for the Simon Attractor.
+        n (int): Number of iterations. Higher values yield smoother output.
+        percentile (float | None): Upper clipping percentile for normalization. Typical values: 95–99.9.
+
+    Returns:
+        NDArray[np.float32]: A normalized (0.0–1.0) 2D array representing the histogram density.
+    """
+    x_raw, y_raw = iterate(a, b, n)
+    histogram, _, _ = np.histogram2d(x_raw, y_raw, bins=resolution)
+
+    clip_max = np.percentile(histogram, percentile)
+    clip_max = clip_max if clip_max > current_percentile_max else current_percentile_max
+    if clip_max == 0 or np.isnan(clip_max):
+        clip_max = 1.0
+    h_normalized = histogram / clip_max
+    h_normalized = np.clip(h_normalized, 0, 1)
+    return h_normalized.astype(np.float32), clip_max
+
+
+def to_img(h_normalized: NDArray[np.float32], colors: NDArray[np.float32]) -> NDArray[np.uint8]:
+    values = (h_normalized * 255).astype(int)
+    values = np.clip(values, 0, 255)
+    img = (colors[values] * 255).astype(np.uint8)
+    return img
+
 
 
 @njit(parallel=True)

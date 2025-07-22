@@ -310,39 +310,21 @@ class Toolbar(QWidget):
             return
 
         self.rendering = True
-        # fname = make_filename(a_1, a_2, b_1, b_2, extension="mp4")
         fname = get_save_filename(self)
 
         self.values_a = np.linspace(a_1, a_2, frames)
         self.values_b = np.linspace(b_1, b_2, frames)
-
 
         cmap = plt.get_cmap(self.cmap_box.currentText())
         linear = np.linspace(0, 1, 256)
         self.colors = cmap(linear)
         if invert:
             self.colors = self.colors[::-1]
-
-        # if use_performance_mode:
-        #     t1 = time()
-        #     self.renderer = Renderer(self.values_a, self.values_b, fname, fps, self.colors, res, n, percentile)
-        #     self.renderer.render_all_frames()
-        #     elapsed = time() - t1
-
-        #     # Format time nicely
-        #     minutes = int(elapsed // 60)
-        #     seconds = elapsed % 60
-
-        #     # Total number of frames rendered is based on length of values_a
-        #     frame_count = len(self.values_a)
-        #     per_frame = round(elapsed / frame_count, 2)
-        #     print(f"Render of {frame_count} frames took {minutes}:{seconds:.0f}s = {per_frame}s per frame")
         self.writer = VideoFileWriter(fname, fps=fps)
         if use_performance_mode:
             self.worker = RenderWorker(self.values_a, self.values_b, fname, fps, self.colors, res, n, percentile)
             self.worker.finished.connect(self.on_render_done)
             self.worker.start()
-
         else:
             self.t1 = time()
             self.frame_index = 0

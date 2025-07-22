@@ -51,5 +51,5 @@ class VideoFileWriter:
         for frame in self.frames:
             out.write(frame)
         out.release()
-        print(f"Video saved to '{self.filename}'")
+        print(f"Video saved to -> '{self.filename}'")
         QApplication.restoreOverrideCursor()
