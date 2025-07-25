@@ -4,14 +4,17 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtGui import QRegularExpressionValidator, QIntValidator
 from PyQt6.QtCore import QTimer, Qt, QRegularExpression
+from PyQt6.QtCore import QThread, pyqtSignal
 from VideoWriter import VideoFileWriter
 from effecient_render import Renderer
 if 0!=0: from app import MainWindow
 from numpy.typing import NDArray
 import matplotlib.pyplot as plt
+from Better_dropdown import BetterDropDown
 from time import time
 import numpy as np
 from effecient_render import to_img
+from point import Point, Animation, Libary
 
 # cmap
 top_colormaps = [
@@ -48,7 +51,8 @@ class Toolbar(QWidget):
         self.colors: NDArray | None = None
         self.renderer = None
         self.h_normalized = None
-
+        self.libary = Libary()
+        self.libary.load_file(r"C:\Users\silas\Desktop\attractor_tool\animations.json")
         self.init_ui()
 
     def init_ui(self):
@@ -71,6 +75,11 @@ class Toolbar(QWidget):
         para_1.addWidget(QLabel("b:"))
         para_1.addWidget(self.input_b)
         layout.addLayout(para_1)
+
+        # add preset btn
+        self.preset_btn_point = QPushButton("Add")
+        self.preset_btn_point.clicked.connect(lambda: self.add_point_to_preset())
+        para_1.addWidget(self.preset_btn_point)
 
         # Input: iterations
         para_3 = QHBoxLayout()
@@ -140,6 +149,11 @@ class Toolbar(QWidget):
         animate_layout_b.addWidget(self._to_b)
         layout.addLayout(animate_layout_b)
 
+        # add preset btn
+        self.preset_btn = QPushButton("Add Animation Preset")
+        self.preset_btn.clicked.connect(lambda: self.add_animation_to_preset())
+        layout.addWidget(self.preset_btn)
+
         self._from.setFixedWidth(50)
         self._from_b.setFixedWidth(50)
         self._to.setFixedWidth(50)
@@ -174,6 +188,12 @@ class Toolbar(QWidget):
         buffer_layout.addWidget(label_buffer)
         buffer_layout.addWidget(self.buffer_input)
         layout.addLayout(buffer_layout)
+
+        # Preset
+        self.preset = BetterDropDown()
+        layout.addWidget(self.preset)
+        self.update_preset_dropdown()
+        self.preset.currentTextChanged.connect(lambda: self.load_preset())
 
         # video time label
         self.video_time_label = QLabel("")
@@ -225,6 +245,61 @@ class Toolbar(QWidget):
 
         self.update_render()
         self.update_time()
+
+    def update_preset_dropdown(self):
+        self.preset.clear()
+        uuids = [str(x) for x in self.libary.uuids()]
+        uuids.append("")
+        texts = [str(x) for x in self.libary.data_points()]
+        texts.append("")
+        self.preset.addItems(texts, uuids)
+        self.preset.setCurrentText("")
+
+    def add_point_to_preset(self):
+        try:
+            a = self.a
+            b = self.b
+        except ValueError:
+            return
+        p1 = Point((a, b))
+        self.libary.add_to_lib(p1)
+        self.update_preset_dropdown()
+
+    def add_animation_to_preset(self):
+        try:
+            a_1 = float(self._from.text())
+            a_2 = float(self._to.text())
+            b_1 = float(self._from_b.text())
+            b_2 = float(self._to_b.text())
+        except ValueError:
+            return
+
+        p1 = Point((a_1, b_1))
+        p2 = Point((a_2, b_2))
+        animation = Animation(p1, p2)
+        self.libary.add_to_lib(animation)
+        self.update_preset_dropdown()
+
+    def load_preset(self):
+        try:
+            uuid = int(self.preset.currentText())
+        except ValueError:
+            return
+        preset = self.libary.get(uuid)
+
+        self.blockSignals(True)
+        if isinstance(preset, Point):
+            self.input_a.setText(str(preset.a))
+            self.blockSignals(False)
+            self.input_b.setText(str(preset.b))
+
+        if isinstance(preset, Animation):
+            self._from.setText(str(preset.origin.a))
+            self._to.setText(str(preset.end.a))
+
+            self._from_b.setText(str(preset.origin.b))
+            self._to_b.setText(str(preset.end.b))
+        self.blockSignals(False)
 
     def update_time(self):
         try:
@@ -418,10 +493,6 @@ def get_save_filename(cls):
     return file_path
 
 
-from PyQt6.QtCore import QThread, pyqtSignal
-from time import time
-
-# Step 1: Create a Worker thread class
 class RenderWorker(QThread):
     finished = pyqtSignal(float, int)
 

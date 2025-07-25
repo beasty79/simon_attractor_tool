@@ -19,6 +19,9 @@ class Point:
     def __repr__(self) -> str:
         return f"{self.origin}"
 
+    def __str__(self) -> str:
+        return f"a={self.a} b={self.b}"
+
     def to_json_item(self) -> dict:
         return {
             "type" : "Point",
@@ -27,7 +30,7 @@ class Point:
 
     def __eq__(self, value: object) -> bool:
         if isinstance(value, Point):
-            return self.a == value.a and self.b == value.b and self.uuid == value.uuid
+            return self.a == value.a and self.b == value.b
         return False
 
 
@@ -60,9 +63,11 @@ class Animation:
 
     def __eq__(self, value: object) -> bool:
         if isinstance(value, Animation):
-            return self.origin == value.origin and self.end == value.end and self.uuid == value.uuid
+            return self.origin == value.origin and self.end == value.end
         return False
 
+    def __str__(self) -> str:
+        return f"a = ({self.origin.a} -> {self.end.a}) b = ({self.origin.b} -> {self.end.b})"
 
 class Libary:
     def __init__(self) -> None:
@@ -85,6 +90,16 @@ class Libary:
                 animation = Animation(Point(item["origin"]), Point(item["end"]))
                 self.animations.append(animation)
 
+    def get(self, uuid: int) -> Point | Animation:
+        for p in self.points:
+            if p.uuid == uuid:
+                return p
+
+        for animation in self.animations:
+            if animation.uuid == uuid:
+                return animation
+        raise ValueError
+
     def add_to_lib(self, new: Point | Animation):
         if isinstance(new, Point):
             if new in self.points:
@@ -92,6 +107,7 @@ class Libary:
             self.points.append(new)
 
         if isinstance(new, Animation):
+            print(new, self.animations, self.animations[0] == new)
             if new in self.animations:
                 return
             self.animations.append(new)
@@ -113,3 +129,19 @@ class Libary:
 
         for ani in self.animations:
             yield (ani.uuid, ani)
+
+    def uuids(self) -> list[int]:
+        uuids = []
+        for p in self.points:
+            uuids.append(p.uuid)
+        for ani in self.animations:
+            uuids.append(ani.uuid)
+        return uuids
+
+    def data_points(self) -> list[Point | Animation]:
+        data = []
+        for p in self.points:
+            data.append(p)
+        for ani in self.animations:
+            data.append(ani)
+        return data
