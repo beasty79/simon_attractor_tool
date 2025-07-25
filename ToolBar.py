@@ -11,10 +11,11 @@ from numpy.typing import NDArray
 import matplotlib.pyplot as plt
 from time import time
 import numpy as np
+from effecient_render import to_img
 
 # cmap
 top_colormaps = [
-    'viridis', 'gnuplot','plasma','inferno','magma','cividis', 'terrain'
+    'viridis', 'gnuplot','plasma','inferno','magma','cividis', 'terrain',
     'turbo','coolwarm','Spectral','RdYlBu','RdYlGn','PiYG',
     'PRGn', 'BrBG', 'PuOr', 'Set1', 'Set2', 'Set3', 'Paired', 'Pastel1', 'Pastel2', 'tab10', 'tab20', 'cubehelix', 'nipy_spectral',
     'twilight', 'twilight_shifted', 'ocean'
@@ -46,6 +47,7 @@ class Toolbar(QWidget):
         self.animation_params = {}
         self.colors: NDArray | None = None
         self.renderer = None
+        self.h_normalized = None
 
         self.init_ui()
 
@@ -96,12 +98,12 @@ class Toolbar(QWidget):
 
         self.invert_checkbox = QCheckBox("Invert Color")
         layout.addWidget(self.invert_checkbox)
-        self.invert_checkbox.checkStateChanged.connect(lambda: self.update_render())
+        self.invert_checkbox.checkStateChanged.connect(lambda: self.cmap_change())
 
         # colormap
         self.cmap_box = QComboBox(self)
         self.cmap_box.addItems(top_colormaps)
-        self.cmap_box.currentTextChanged.connect(lambda: self.render_single_frame())
+        self.cmap_box.currentTextChanged.connect(lambda: self.cmap_change())
         layout.addWidget(self.cmap_box)
 
         # Separator
@@ -162,6 +164,16 @@ class Toolbar(QWidget):
         fps_layout.addWidget(label_fps)
         fps_layout.addWidget(self.fps_input)
         layout.addLayout(fps_layout)
+
+        # buffer size input
+        buffer_layout = QHBoxLayout()
+        self.buffer_input = QLineEdit("30", self)
+        self.buffer_input.setValidator(int_validator)
+        label_buffer = QLabel("Buffer Size (performance):")
+        label_buffer.setFixedWidth(150)
+        buffer_layout.addWidget(label_buffer)
+        buffer_layout.addWidget(self.buffer_input)
+        layout.addLayout(buffer_layout)
 
         # video time label
         self.video_time_label = QLabel("")
@@ -282,13 +294,31 @@ class Toolbar(QWidget):
         linear = np.linspace(0, 1, 256)
         return cmap(linear)
 
+
+    def cmap_change(self):
+        colors = self.get_colors()
+        if self.invert:
+            colors = colors[::-1]
+
+        if self.h_normalized is not None:
+            im = to_img(self.h_normalized, colors)
+            self.parent_.canvas.display_image(im)
+        else:
+            try:
+                self.h_normalized = self.parent_.new_render(self.resolution, self.a, self.b, self.iterations, colors=colors, percentile=self.percentile)
+            except ValueError:
+                return
+
     def render_single_frame(self):
         t1 = time()
         QApplication.setOverrideCursor(Qt.CursorShape.BusyCursor)
         colors = self.get_colors()
         if self.invert:
             colors = colors[::-1]
-        self.parent_.new_render(self.resolution, self.a, self.b, self.iterations, colors=colors, percentile=self.percentile)
+        try:
+            self.h_normalized = self.parent_.new_render(self.resolution, self.a, self.b, self.iterations, colors=colors, percentile=self.percentile)
+        except ValueError:
+            return
         QApplication.restoreOverrideCursor()
         time_needed = time() - t1
         self.last_frame_sec.setText(f"Last Rendered Frame took {time_needed:.2f}s")
@@ -303,6 +333,7 @@ class Toolbar(QWidget):
             res = int(self.input_res.text())
             n = int(self.input_n.text())
             fps = int(self.fps_input.text())
+            buffer = int(self.buffer_input.text())
             percentile = float(self.input_percentile.text())
             invert = self.invert_checkbox.isChecked()
             use_performance_mode: bool = self.performance_render.isChecked()
@@ -310,6 +341,7 @@ class Toolbar(QWidget):
             print("Invalid input:", e)
             return
 
+        cmap_name = self.cmap_box.currentText()
         self.rendering = True
         fname = get_save_filename(self)
 
@@ -322,8 +354,9 @@ class Toolbar(QWidget):
         if invert:
             self.colors = self.colors[::-1]
         self.writer = VideoFileWriter(fname, fps=fps)
+        self.parent_.generate_infodump(self.writer.filename, a_1, a_2, b_1, b_2, n, cmap_name)
         if use_performance_mode:
-            self.worker = RenderWorker(self.values_a, self.values_b, fname, fps, self.colors, res, n, percentile)
+            self.worker = RenderWorker(self.values_a, self.values_b, fname, fps, self.colors, res, n, percentile, buffer)
             self.worker.finished.connect(self.on_render_done)
             self.worker.start()
         else:
@@ -392,7 +425,7 @@ from time import time
 class RenderWorker(QThread):
     finished = pyqtSignal(float, int)
 
-    def __init__(self, values_a, values_b, fname, fps, colors, res, n, percentile):
+    def __init__(self, values_a, values_b, fname, fps, colors, res, n, percentile, buff_size=None):
         super().__init__()
         self.values_a = values_a
         self.values_b = values_b
@@ -402,11 +435,16 @@ class RenderWorker(QThread):
         self.res = res
         self.n = n
         self.percentile = percentile
+        self.buff_size = buff_size if buff_size is not None else 10
 
     def run(self):
         t1 = time()
-        renderer = Renderer(self.values_a, self.values_b, self.fname, self.fps, self.colors, self.res, self.n, self.percentile)
+        renderer = Renderer(self.values_a, self.values_b, self.fname, self.fps, self.colors, self.res, self.n, self.percentile, buffer_size=self.buff_size)
         renderer.render_all_frames()
         elapsed = time() - t1
         frame_count = len(self.values_a)
         self.finished.emit(elapsed, frame_count)
+
+# points
+# b=1.5 a=[.3;.45]
+#

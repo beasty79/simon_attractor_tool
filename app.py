@@ -2,86 +2,24 @@ from PyQt6.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QWidget, QHB
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 from PyQt6.QtWidgets import QSizePolicy
 from matplotlib.figure import Figure
+from simon import render_raw, to_img
+from PyQt6.QtCore import Qt, QEvent
 from PyQt6.QtGui import QKeyEvent
 from numpy.typing import NDArray
-from PyQt6.QtCore import Qt
 from ToolBar import Toolbar
-from simon import render
+from os import path
 import sys
+from Canvas import MainCanvas
 
-
-class MplCanvas(FigureCanvas):
-    def __init__(self, parent=None):
-        self.fig = Figure()
-        self.ax = self.fig.add_axes((0, 0, 1, 1))
-        super().__init__(self.fig)
-        self.setParent(parent)
-
-        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
-        self.updateGeometry()
-        self.ax.axis('off')
-
-    def display_image(self, img):
-        self.ax.clear()
-        self.ax.set_aspect('auto')
-        self.ax.set_axis_off()
-        self.ax.set_aspect('equal')  # Maintains square pixels
-        self.ax.imshow(img, interpolation='bilinear')
-        self.draw_idle()
-
-
-class MultipleDisplays(QWidget):
-    def __init__(self, parent: QWidget | None, displays: int = 4) -> None:
-        super().__init__(parent)
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(0)
-        self.setLayout(layout)
-        self.displays = displays
-        self.setStyleSheet("background-color: rgb(100, 100, 100);")
-
-        self.canvase: list[MplCanvas] = []
-        for _ in range(self.displays):
-            canvas = MplCanvas(self)
-            self.canvase.append(canvas)
-            layout.addWidget(canvas)
-
-    def display(self, index: int, img: NDArray):
-        self.canvase[index].display_image(img)
-
-    def mirror(self, img: NDArray):
-        for i in range(self.displays):
-            self.canvase[i].display_image(img)
-
-class MainCanvas(QWidget):
-    def __init__(self, parent: QWidget | None) -> None:
-        super().__init__(parent)
-        self.mainCanvas = MplCanvas(self)
-        layout = QHBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(0)
-        layout.addWidget(self.mainCanvas)
-        self.setLayout(layout)
-
-        self.setStyleSheet("background-color: rgb(100, 100, 100);")
-        self.widget = QWidget(self)
-        self.widget.setStyleSheet("border: 1px solid red;")
-        self.widget.setFixedWidth(100)
-        layout.addWidget(self.widget)
-
-    def display_image(self, img: NDArray):
-        self.mainCanvas.display_image(img)
-
-    def resizeEvent(self, a0):
-        size = min(self.width(), self.height())
-        self.resize(size, size)
-        super().resizeEvent(a0)
 
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.init_ui()
         self.toolbar.update_()
+        instance = QApplication.instance()
+        if instance is not None:
+            instance.installEventFilter(self)
 
     def init_ui(self):
         self.setWindowTitle("Render Tool")
@@ -107,14 +45,46 @@ class MainWindow(QMainWindow):
         central_widget.setStyleSheet("background-color: rgb(200, 200, 200)")
         central_widget.updateGeometry()
 
-
     def new_render(self, res: int, a: float, b: float, n: int, percentile: float, colors: NDArray):
         """Renders a single frame and displys it in the UI"""
-        img = render(colors, resolution=res, a=a, b=b, n=n, percentile=percentile)
-        self.canvas.display_image(img)
+        h_normalized, _ = render_raw(res, a, b, n, percentile, 0)
+        im = to_img(h_normalized, colors)
+        self.canvas.display_image(im)
         if self.toolbar.rendering:
-            self.toolbar.writer.add_frame(img)
+            self.toolbar.writer.add_frame(im)
         self.toolbar.update_display(self.toolbar.frame_index, a, b)
+        return h_normalized
+
+    def generate_infodump(self, fpath: str, a0, a1, b0, b1, n, cmap_name):
+        base_name = path.basename(fpath)
+        if "." in base_name:
+            base_name = base_name.split(".")[-2]
+        base_name += ".txt"
+
+        file_content: str = ""
+        file_content += f"a0: {a0}\n"
+        file_content += f"a1: {a1}\n"
+        file_content += f"b0: {b0}\n"
+        file_content += f"b1: {b1}\n"
+        file_content += f"iterations: {n}\n"
+        file_content += f"colormap: {cmap_name}\n"
+
+        fpath = path.dirname(__file__)
+        path_to_log = path.join(fpath, "log", base_name)
+        with open(path_to_log, "w") as f:
+            f.write(file_content)
+
+    def eventFilter(self, a0, a1):
+        if a1 is None:
+            return False
+        if a1.type() == QEvent.Type.KeyPress:
+            if isinstance(a1, QKeyEvent):
+                key = a1.key()
+                if key == Qt.Key.Key_I:
+                    self.toolbar.invert_checkbox.setChecked(not self.toolbar.invert_checkbox.isChecked())
+                    self.toolbar.cmap_change()
+                    return True
+        return False
 
     def keyPressEvent(self, a0: QKeyEvent | None):
         if a0 is None:

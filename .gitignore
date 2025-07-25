@@ -1,4 +1,5 @@
 render/*
-__pycache__/
+./__pycache__/
+./log/*
 *.py[cod]
 *$py.class
