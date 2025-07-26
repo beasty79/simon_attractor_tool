@@ -7,7 +7,7 @@ from PyQt6.QtCore import QTimer, Qt, QRegularExpression
 from PyQt6.QtCore import QThread, pyqtSignal
 from VideoWriter import VideoFileWriter
 from effecient_render import Renderer
-if 0!=0: from app import MainWindow
+if 0!=0: from main import MainWindow
 from numpy.typing import NDArray
 import matplotlib.pyplot as plt
 from Better_dropdown import BetterDropDown
@@ -16,6 +16,7 @@ import numpy as np
 from effecient_render import to_img
 from point import Point, Animation, Libary
 from Canvas import MultipleDisplays
+
 
 # cmap
 top_colormaps = [
@@ -53,7 +54,7 @@ class Toolbar(QWidget):
         self.renderer = None
         self.h_normalized = None
         self.libary = Libary()
-        self.libary.load_file(r"C:\Users\silas\Desktop\attractor_tool\animations.json")
+        self.libary.load_file("./animations.json")
         self.init_ui()
 
     def init_ui(self):
