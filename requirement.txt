@@ -1,1 +1,0 @@
-matplotlib PyQt6 numpy numba opencv-python
