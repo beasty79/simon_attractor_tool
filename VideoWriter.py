@@ -37,7 +37,7 @@ class VideoFileWriter:
 
         self.frames.append(frame)
 
-    def save(self):
+    def save(self, no_cursor_override = False):
         if not self.frames:
             raise ValueError("No frames to write")
 
@@ -52,4 +52,5 @@ class VideoFileWriter:
             out.write(frame)
         out.release()
         print(f"Video saved to -> '{self.filename}'")
-        QApplication.restoreOverrideCursor()
+        if not no_cursor_override:
+            QApplication.restoreOverrideCursor()

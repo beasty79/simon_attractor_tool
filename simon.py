@@ -64,7 +64,7 @@ def render(colors: np.typing.NDArray[np.float32], resolution: int, a: float, b: 
     return img
 
 
-def render_raw(resolution: int, a: float, b: float, n: int, percentile: float, current_percentile_max: int) -> tuple[NDArray[np.float32], Any]:
+def render_raw(resolution: int, a: float, b: float, n: int, percentile: float, current_percentile_max: int = 0) -> tuple[NDArray[np.float32], Any]:
     """
     same as render but it doesnt apply the colormaps yet
     Computes a normalized 2D histogram of the Simon Attractor iterations.
