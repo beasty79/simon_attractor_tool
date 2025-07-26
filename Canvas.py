@@ -52,6 +52,7 @@ class MultipleDisplays(QWidget):
         super().__init__(parent)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
+        self.inverted = False
         self.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
         self.setLayout(layout)
@@ -78,11 +79,17 @@ class MultipleDisplays(QWidget):
         self.h_normalized = raw
 
     def invert(self, inverted: bool):
+        from time import time
+        t1= time()
+        if self.inverted == inverted:
+            return
         if self.h_normalized is None:
             return
 
         for i in range(self.displays):
             self.display_raw_image(self.h_normalized, i, inverted=inverted)
+        self.inverted = inverted
+        print(f"took {time()-t1:.2f}s for {self.displays} displays")
 
     def display(self, index: int, img: NDArray):
         self.canvase[index].display_image(img)

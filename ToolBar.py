@@ -15,8 +15,6 @@ from time import time
 import numpy as np
 from effecient_render import to_img
 from point import Point, Animation, Libary
-from Canvas import MultipleDisplays
-
 
 # cmap
 top_colormaps = [
