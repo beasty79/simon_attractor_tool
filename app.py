@@ -1,7 +1,7 @@
 from PyQt6.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QWidget, QHBoxLayout
-from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
+# from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 from PyQt6.QtWidgets import QSizePolicy
-from matplotlib.figure import Figure
+# from matplotlib.figure import Figure
 from simon import render_raw, to_img
 from PyQt6.QtCore import Qt, QEvent
 from PyQt6.QtGui import QKeyEvent
@@ -9,8 +9,21 @@ from numpy.typing import NDArray
 from ToolBar import Toolbar
 from os import path
 import sys
-from Canvas import MainCanvas
+from Canvas import MainCanvas, MultipleDisplays
 
+mini_cmaps = [
+    "viridis",
+    "cividis",
+    "twilight",
+    "gnuplot",
+]
+
+mini_cmaps_2 = [
+    "Spectral",
+    "Pastel1",
+    "cubehelix",
+    "ocean",
+]
 
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -20,6 +33,10 @@ class MainWindow(QMainWindow):
         instance = QApplication.instance()
         if instance is not None:
             instance.installEventFilter(self)
+
+        self.minicanvas_colors_1: list[list] = []
+        self.minicanvas_colors_2: list[list] = []
+        self.showMaximized()
 
     def init_ui(self):
         self.setWindowTitle("Render Tool")
@@ -39,17 +56,35 @@ class MainWindow(QMainWindow):
 
         self.canvas = MainCanvas(self)
         main_layout.addWidget(self.canvas, stretch=1)
-        # self.minicanvas = MultipleDisplays(self, 4)
-        # main_layout.addWidget(self.minicanvas)
+
+        self.minicanvas_ = MultipleDisplays(self, 4, mini_cmaps)
+        self.minicanvas_.canvasSelected.connect(lambda col: self.toolbar.cmap_box.setCurrentText(col))
+        main_layout.addWidget(self.minicanvas_)
+
+        self.minicanvas = MultipleDisplays(self, 4, mini_cmaps_2)
+        self.minicanvas.canvasSelected.connect(lambda col: self.toolbar.cmap_box.setCurrentText(col))
+        main_layout.addWidget(self.minicanvas)
+
 
         central_widget.setStyleSheet("background-color: rgb(200, 200, 200)")
         central_widget.updateGeometry()
+
+    def invert_minidiplays(self, boolean: bool):
+        self.minicanvas.invert(boolean)
+        self.minicanvas_.invert(boolean)
 
     def new_render(self, res: int, a: float, b: float, n: int, percentile: float, colors: NDArray):
         """Renders a single frame and displys it in the UI"""
         h_normalized, _ = render_raw(res, a, b, n, percentile, 0)
         im = to_img(h_normalized, colors)
         self.canvas.display_image(im)
+
+        for i in range(self.minicanvas_.displays):
+            self.minicanvas_.display_raw_image(h_normalized, i, self.toolbar.invert)
+
+        for i in range(self.minicanvas.displays):
+            self.minicanvas.display_raw_image(h_normalized, i, self.toolbar.invert)
+
         if self.toolbar.rendering:
             self.toolbar.writer.add_frame(im)
         self.toolbar.update_display(self.toolbar.frame_index, a, b)

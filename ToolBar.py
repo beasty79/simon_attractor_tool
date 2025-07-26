@@ -15,6 +15,7 @@ from time import time
 import numpy as np
 from effecient_render import to_img
 from point import Point, Animation, Libary
+from Canvas import MultipleDisplays
 
 # cmap
 top_colormaps = [
@@ -364,11 +365,13 @@ class Toolbar(QWidget):
         res = int(self.input_res.text())
         return res if res > 0 else 10
 
-    def get_colors(self) -> NDArray:
-        cmap = plt.get_cmap(self.cmap_box.currentText())
+    def get_colors(self, cmap=None) -> NDArray:
+        if cmap is not None:
+            color_map = plt.get_cmap(cmap)
+        else:
+            color_map = plt.get_cmap(self.cmap_box.currentText())
         linear = np.linspace(0, 1, 256)
-        return cmap(linear)
-
+        return color_map(linear)
 
     def cmap_change(self):
         colors = self.get_colors()
@@ -383,6 +386,8 @@ class Toolbar(QWidget):
                 self.h_normalized = self.parent_.new_render(self.resolution, self.a, self.b, self.iterations, colors=colors, percentile=self.percentile)
             except ValueError:
                 return
+
+        self.parent_.invert_minidiplays(self.invert)
 
     def render_single_frame(self):
         t1 = time()
