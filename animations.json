@@ -14,6 +14,27 @@
         ]
     },
     {
+        "type": "Point",
+        "origin": [
+            0.4,
+            1.8
+        ]
+    },
+    {
+        "type": "Point",
+        "origin": [
+            0.4,
+            -0.98
+        ]
+    },
+    {
+        "type": "Point",
+        "origin": [
+            -0.54,
+            -0.9
+        ]
+    },
+    {
         "type": "Animation",
         "origin": [
             0.3,
@@ -22,6 +43,17 @@
         "end": [
             0.57,
             1.5
+        ]
+    },
+    {
+        "type": "Animation",
+        "origin": [
+            1.7,
+            0.2
+        ],
+        "end": [
+            1.7,
+            0.54
         ]
     }
 ]

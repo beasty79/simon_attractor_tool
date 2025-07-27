@@ -6,13 +6,14 @@ import multiprocessing
 from time import time
 import math
 import numpy as np
+import os
 import matplotlib.pyplot as plt
 
 
 
 class Performance_Renderer:
     """This is an api wrapper class for rendering simon attractors"""
-    def __init__(self, a: int | NDArray, b: int | NDArray, frames: int, fps: int = 30, n: int | list[int] = 1_000_000, resolution: int | list[int] = 1000, percentile: float | list[float] = 99, frame_buffer = 40) -> None:
+    def __init__(self, a: int | NDArray, b: int | NDArray, frames: int, fps: int = 30, n: int | list[int] = 1_000_000, resolution: int | list[int] = 1000, percentile: float | NDArray = 99, frame_buffer = 40) -> None:
         self.a = a
         self.b = b
         self.n = n
@@ -59,7 +60,20 @@ class Performance_Renderer:
         else:
             return self.value[arg]
 
-    def start_render_process(self, fname: str):
+    def get_unique_fname(self, fname: str) -> str:
+        base_path = os.path.dirname(fname)
+        full_name = os.path.basename(fname)
+        name_only, ext = os.path.splitext(full_name)
+
+        new_name = fname
+        i_ = 0
+        while os.path.exists(new_name):
+            i_ += 1
+            name_comp = f"{name_only}({i_}){ext}"
+            new_name = os.path.join(base_path, name_comp)
+        return new_name
+
+    def start_render_process(self, fname: str, verbose_image = False):
         if self.color is None:
             raise SyntaxError("first call: 'add_colormap'")
 
@@ -71,22 +85,35 @@ class Performance_Renderer:
 
         args = list(zip(res, a, b, n, percentile))
         assert all(len(lst) == len(res) for lst in [a, b, n, percentile]), "Mismatched lengths in input lists"
-        self.writer = VideoFileWriter(fname, self.fps)
+
+        self.writer = VideoFileWriter(
+            filename=self.get_unique_fname(fname),
+            fps=self.fps
+        )
 
         print("Render Process started!")
         tstart = time()
-        with multiprocessing.Pool() as pool:
+        batches_needed = self.frames // self.frame_buffer
+        with multiprocessing.Pool(8) as pool:
             for i in range(0, len(args), self.frame_buffer):
+                print(f"batch: ({i//self.frame_buffer}/{batches_needed})")
                 batch = args[i:i + self.frame_buffer]
                 results = pool.starmap(render_raw, batch)
-                for h_norm, _ in results:
+
+                As = a[i:i+self.frame_buffer]
+                Bs = b[i:i+self.frame_buffer]
+                for index, (h_norm, _) in enumerate(results):
                     img = to_img(h_norm, self.color)
-                    self.writer.add_frame(img)
+                    if verbose_image:
+                        self.writer.add_frame(img, a=As[index], b=Bs[index])
+                    else:
+                        self.writer.add_frame(img)
 
         total = time() - tstart
         min_ = round(total // 60)
         sec_ = round(total - min_ * 60)
         print(f"Finished Render Process in {min_:02d}:{sec_:02d}")
+        print(f"took {self.frames // int(total):.2f}s per frame")
         self.writer.save()
 
 class ColorMap:
@@ -105,18 +132,71 @@ class ColorMap:
     def get(self) -> NDArray:
         return self.color[::-1] if self.inverted else self.color
 
-def main():
-    a = np.linspace(.35, .45, 100)
-    b = np.linspace(1.5, 1.5, 100)
 
+def sinspace(lower, upper, n, p=1):
+    """
+    Generate `n` values between `lower` and `upper` in a sinusoidal pattern
+    over `p` periods.
+
+    Parameters:
+    - lower (float): The minimum value.
+    - upper (float): The maximum value.
+    - n (int): Number of points in the output array.
+    - p (float): Number of sine periods to span across the interval.
+
+    Returns:
+    - np.ndarray: An array of values shaped by a sine wave between lower and upper.
+    """
+    phase = np.linspace(0, 2 * np.pi * p, n)
+    sin_wave = (np.sin(phase) + 1) / 2
+    return lower + (upper - lower) * sin_wave
+
+
+def map_area(a: NDArray, b: NDArray, fname: str, colormap: ColorMap):
+    assert len(a) == len(b), "a & b dont match in length"
+    A, B = np.meshgrid(a, b)
+    A = A.ravel()
+    B = B.ravel()
     process = Performance_Renderer(
         a=a,
         b=b,
-        frames=100,
-        fps=60
+        frames=len(a),
+        fps=10,
+        percentile=99,
+        n=6000000
     )
-    process.add_colormap(ColorMap("viridis"))
-    process.start_render_process("./render/api.mp4")
+    process.add_colormap(colormap)
+    process.start_render_process(fname, verbose_image=True)
+
+
+def main():
+    t = 60
+    # frames = 3000
+    fps = 60
+    frames = t * fps
+    print(f"{frames=} {fps=} {t=}")
+    accept = input("Enter y or yes to Continue:")
+    if accept not in ["y", "Y", "yes", "Yes", "YES"]:
+        return
+
+    a = sinspace(0.34, 0.355, frames, p=1)
+    b = np.linspace(1.5, 1.5, frames)
+    # percentile = np.linspace(95, 99.9, frames)
+    process = Performance_Renderer(
+        a=a,
+        b=b,
+        frames=frames,
+        fps=fps,
+        percentile=98,
+        n=3000000,
+        frame_buffer=60
+    )
+    process.set_static("percentile", True)
+    cmap = ColorMap("viridis")
+    cmap.set_inverted(True)
+
+    process.add_colormap(cmap)
+    process.start_render_process("./render/sin.mp4", verbose_image=True)
 
 if __name__ == "__main__":
     main()

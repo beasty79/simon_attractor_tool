@@ -15,26 +15,27 @@ class VideoFileWriter:
     def change_cursor(self):
         QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
 
-
-    def add_frame(self, frame: np.ndarray):
+    def add_frame(self, frame: np.ndarray, a: float | None = None, b: float | None = None):
         if self.frame_size is None:
-            # Set frame size and color mode based on first frame
             self.frame_size = (frame.shape[1], frame.shape[0])
             self.is_color = len(frame.shape) == 3
 
-        # Validate size consistency
         if (frame.shape[1], frame.shape[0]) != self.frame_size:
             return
 
-            # Check for 4 channels (RGBA)
+        # Convert 4-channel RGBA to BGR
         if len(frame.shape) == 3 and frame.shape[2] == 4:
             frame = cv2.cvtColor(frame, cv2.COLOR_RGBA2BGR)
-            # frame = frame[:, :, :3]
 
-        # Convert grayscale to BGR if needed
+        # Convert grayscale to BGR
         if not self.is_color and len(frame.shape) == 2:
             frame = cv2.cvtColor(frame, cv2.COLOR_GRAY2BGR)
 
+        # 🆕 Overlay a, b values if provided
+        if a is not None and b is not None:
+            text = f"a = {a:.4f}, b = {b:.4f}"
+            cv2.putText(frame, text, (10, 30), cv2.FONT_HERSHEY_SIMPLEX,
+                        1, (255, 255, 255), 2, cv2.LINE_AA)
         self.frames.append(frame)
 
     def save(self, no_cursor_override = False):
