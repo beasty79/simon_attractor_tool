@@ -73,7 +73,7 @@ class Performance_Renderer:
             new_name = os.path.join(base_path, name_comp)
         return new_name
 
-    def start_render_process(self, fname: str, verbose_image = False):
+    def start_render_process(self, fname: str, verbose_image = False, threads: int | None = 4):
         if self.color is None:
             raise SyntaxError("first call: 'add_colormap'")
 
@@ -82,39 +82,37 @@ class Performance_Renderer:
         b: list[int] = self.get_iter_value("b")
         n: list[int] = self.get_iter_value("n")
         percentile: list[int] = self.get_iter_value("percentile")
+        col = [self.color] * len(a)
 
-        args = list(zip(res, a, b, n, percentile))
-        assert all(len(lst) == len(res) for lst in [a, b, n, percentile]), "Mismatched lengths in input lists"
+        args = list(zip(res, a, b, n, percentile, col))
+        assert all(len(lst) == len(res) for lst in [a, b, n, percentile, col]), "Mismatched lengths in input lists"
 
         self.writer = VideoFileWriter(
             filename=self.get_unique_fname(fname),
             fps=self.fps
         )
 
-        print("Render Process started!")
+        print("Render process started!")
         tstart = time()
-        batches_needed = self.frames // self.frame_buffer
-        with multiprocessing.Pool(8) as pool:
-            for i in range(0, len(args), self.frame_buffer):
-                print(f"batch: ({i//self.frame_buffer}/{batches_needed})")
-                batch = args[i:i + self.frame_buffer]
-                results = pool.starmap(render_raw, batch)
-
-                As = a[i:i+self.frame_buffer]
-                Bs = b[i:i+self.frame_buffer]
-                for index, (h_norm, _) in enumerate(results):
-                    img = to_img(h_norm, self.color)
-                    if verbose_image:
-                        self.writer.add_frame(img, a=As[index], b=Bs[index])
-                    else:
-                        self.writer.add_frame(img)
-
+        with multiprocessing.Pool(threads) as pool:
+            for i, img in enumerate(pool.imap(render_wrapper, args, chunksize=8)):
+                # img = to_img(h_norm, self.color)
+                if verbose_image:
+                    self.writer.add_frame(img, a=a[i], b=b[i])
+                else:
+                    self.writer.add_frame(img)
+                print(f"Rendered frame {i + 1}/{self.frames}")
         total = time() - tstart
-        min_ = round(total // 60)
-        sec_ = round(total - min_ * 60)
-        print(f"Finished Render Process in {min_:02d}:{sec_:02d}")
-        print(f"took {self.frames // int(total):.2f}s per frame")
+        min_ = int(total // 60)
+        sec_ = int(total % 60)
+        print(f"Finished render process in {min_:02d}:{sec_:02d}")
+        print(f"Averaged {self.frames / total:.2f} fps")
         self.writer.save()
+
+def render_wrapper(args):
+    h, _ = render_raw(*args[:-1])
+    img = to_img(h, args[-1])
+    return img
 
 class ColorMap:
     def __init__(self, name: str) -> None:
@@ -170,10 +168,10 @@ def map_area(a: NDArray, b: NDArray, fname: str, colormap: ColorMap):
 
 
 def main():
-    t = 60
-    # frames = 3000
-    fps = 60
+    t = 10
+    fps = 100
     frames = t * fps
+    # frames = 300
     print(f"{frames=} {fps=} {t=}")
     accept = input("Enter y or yes to Continue:")
     if accept not in ["y", "Y", "yes", "Yes", "YES"]:
