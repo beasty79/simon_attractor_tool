@@ -100,7 +100,7 @@ class Performance_Renderer:
                     self.writer.add_frame(img, a=a[i], b=b[i])
                 else:
                     self.writer.add_frame(img)
-                # print(f"Rendered frame {i + 1}/{self.frames}")
+                print(f"Rendered frame {i + 1}/{self.frames}")
         total = time() - tstart
         min_ = int(total // 60)
         sec_ = int(total % 60)
@@ -174,33 +174,34 @@ def map_area(a: NDArray, b: NDArray, fname: str, colormap: ColorMap):
 
 
 def main():
-    t = 2 * 60
+    t = 1 * 60
     fps = 60
     frames = t * fps
     # frames = 300
     print(f"{frames=} {fps=} {t=}")
-    accept = input("Enter y or yes to Continue:")
+    accept = input("Enter y or yes to Continue: ")
     if accept not in ["y", "Y", "yes", "Yes", "YES"]:
         return
 
-    a = sinspace(0.32, 0.35, frames, p=1)
-    b = sinspace(1.45, 1.55, frames, p=5)
+    a = sinspace(0.333, 0.35, frames, p=1)
+    b = sinspace(1.45, 1.55, frames, p=2)
     # b = np.linspace(1.5, 1.5, frames)
     bpm = 145
     minutes = t / 60
     periods = minutes * bpm
 
-    percentile = sinspace(98, 98.4, frames, p=periods)
+    percentile = sinspace(98.25, 98.25, frames, p=periods)
     process = Performance_Renderer(
         a=a,
         b=b,
         frames=frames,
         fps=fps,
         percentile=percentile,
-        n=7000000
+        n=1_000_000
+        # n=7000000
     )
     process.set_static("percentile", False)
-    cmap = ColorMap("viridis")
+    cmap = ColorMap("cubehelix")
     cmap.set_inverted(True)
 
     process.add_colormap(cmap)

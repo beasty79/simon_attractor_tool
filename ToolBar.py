@@ -535,7 +535,7 @@ class RenderWorker(QThread):
 
     def run(self):
         t1 = time()
-        renderer = Renderer(self.values_a, self.values_b, self.fname, self.fps, self.colors, self.res, self.n, self.percentile, buffer_size=self.buff_size)
+        renderer = Renderer(self.values_a, self.values_b, self.fname, self.fps, self.colors, self.res, self.n, self.percentile)
         renderer.render_all_frames()
         elapsed = time() - t1
         frame_count = len(self.values_a)
