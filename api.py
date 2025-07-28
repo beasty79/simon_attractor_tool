@@ -10,10 +10,9 @@ import os
 import matplotlib.pyplot as plt
 
 
-
 class Performance_Renderer:
     """This is an api wrapper class for rendering simon attractors"""
-    def __init__(self, a: int | NDArray, b: int | NDArray, frames: int, fps: int = 30, n: int | list[int] = 1_000_000, resolution: int | list[int] = 1000, percentile: float | NDArray = 99, frame_buffer = 40) -> None:
+    def __init__(self, a: int | NDArray, b: int | NDArray, frames: int, fps: int = 30, n: int | list[int] = 1_000_000, resolution: int | list[int] = 1000, percentile: float | NDArray = 99) -> None:
         self.a = a
         self.b = b
         self.n = n
@@ -34,7 +33,6 @@ class Performance_Renderer:
             'resolution': True,
             'percentile': True
         }
-        self.frame_buffer = frame_buffer
         self.fps = fps
         self.writer = None
         self.color = None
@@ -73,7 +71,7 @@ class Performance_Renderer:
             new_name = os.path.join(base_path, name_comp)
         return new_name
 
-    def start_render_process(self, fname: str, verbose_image = False, threads: int | None = 4):
+    def start_render_process(self, fname: str, verbose_image = False, threads: int | None = 4, chunksize = 4):
         if self.color is None:
             raise SyntaxError("first call: 'add_colormap'")
 
@@ -95,13 +93,14 @@ class Performance_Renderer:
         print("Render process started!")
         tstart = time()
         with multiprocessing.Pool(threads) as pool:
-            for i, img in enumerate(pool.imap(render_wrapper, args, chunksize=8)):
-                # img = to_img(h_norm, self.color)
+            for i, (img, collapsed) in enumerate(pool.imap(render_wrapper, args, chunksize=chunksize)):
+                if collapsed:
+                    continue
                 if verbose_image:
                     self.writer.add_frame(img, a=a[i], b=b[i])
                 else:
                     self.writer.add_frame(img)
-                print(f"Rendered frame {i + 1}/{self.frames}")
+                # print(f"Rendered frame {i + 1}/{self.frames}")
         total = time() - tstart
         min_ = int(total // 60)
         sec_ = int(total % 60)
@@ -112,7 +111,14 @@ class Performance_Renderer:
 def render_wrapper(args):
     h, _ = render_raw(*args[:-1])
     img = to_img(h, args[-1])
-    return img
+
+    non_zero = np.count_nonzero(h)
+    collapsed = False
+    pixel: int = args[0]
+    thresh = pixel * pixel * 0.1
+    if non_zero < thresh:
+        collapsed = True
+    return img, collapsed
 
 class ColorMap:
     def __init__(self, name: str) -> None:
@@ -131,7 +137,7 @@ class ColorMap:
         return self.color[::-1] if self.inverted else self.color
 
 
-def sinspace(lower, upper, n, p=1):
+def sinspace(lower, upper, n, p=1.0):
     """
     Generate `n` values between `lower` and `upper` in a sinusoidal pattern
     over `p` periods.
@@ -168,8 +174,8 @@ def map_area(a: NDArray, b: NDArray, fname: str, colormap: ColorMap):
 
 
 def main():
-    t = 10
-    fps = 100
+    t = 2 * 60
+    fps = 60
     frames = t * fps
     # frames = 300
     print(f"{frames=} {fps=} {t=}")
@@ -177,24 +183,28 @@ def main():
     if accept not in ["y", "Y", "yes", "Yes", "YES"]:
         return
 
-    a = sinspace(0.34, 0.355, frames, p=1)
-    b = np.linspace(1.5, 1.5, frames)
-    # percentile = np.linspace(95, 99.9, frames)
+    a = sinspace(0.32, 0.35, frames, p=1)
+    b = sinspace(1.45, 1.55, frames, p=5)
+    # b = np.linspace(1.5, 1.5, frames)
+    bpm = 145
+    minutes = t / 60
+    periods = minutes * bpm
+
+    percentile = sinspace(98, 98.4, frames, p=periods)
     process = Performance_Renderer(
         a=a,
         b=b,
         frames=frames,
         fps=fps,
-        percentile=98,
-        n=3000000,
-        frame_buffer=60
+        percentile=percentile,
+        n=7000000
     )
-    process.set_static("percentile", True)
+    process.set_static("percentile", False)
     cmap = ColorMap("viridis")
     cmap.set_inverted(True)
 
     process.add_colormap(cmap)
-    process.start_render_process("./render/sin.mp4", verbose_image=True)
+    process.start_render_process("./render/osc.mp4", verbose_image=True, threads=12, chunksize=4)
 
 if __name__ == "__main__":
     main()

@@ -3,7 +3,7 @@ from PyQt6.QtCore import Qt
 import numpy as np
 import cv2
 
-
+test_lst = []
 class VideoFileWriter:
     def __init__(self, filename: str, fps: int = 30):
         self.filename = filename
@@ -36,6 +36,12 @@ class VideoFileWriter:
             text = f"a = {a:.4f}, b = {b:.4f}"
             cv2.putText(frame, text, (10, 30), cv2.FONT_HERSHEY_SIMPLEX,
                         1, (255, 255, 255), 2, cv2.LINE_AA)
+
+        # significant_pixel = count_significant_pixels(frame, threshold=20, min_pixels=100, verbose=False)
+        # uniform = is_mostly_uniform(frame, threshold=5, verbose=True)
+        # print(significant_pixel, not uniform)
+
+        # if significant_pixel and not uniform:
         self.frames.append(frame)
 
     def save(self, no_cursor_override = False):
@@ -55,3 +61,27 @@ class VideoFileWriter:
         print(f"Video saved to -> '{self.filename}'")
         if not no_cursor_override:
             QApplication.restoreOverrideCursor()
+
+
+def count_significant_pixels(frame: np.ndarray, threshold: int = 20, min_pixels: int = 100, verbose = False):
+    # Umwandeln in Graustufen für einfacheren Vergleich
+    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+    # Pixel, die sich von der häufigsten Farbe unterscheiden
+    hist = cv2.calcHist([gray], [0], None, [256], [0, 256])
+    dominant_value = np.argmax(hist)
+    mask = np.abs(gray.astype(int) - dominant_value) > threshold
+    count = np.count_nonzero(mask)
+    result = count >= min_pixels
+    if verbose:
+        print(f"non-zero values ({threshold=}): {count} ")
+    return result
+
+
+def is_mostly_uniform(frame: np.ndarray, threshold: float = 5.0, verbose = False) -> bool:
+    variance = np.var(frame)
+    result = bool(variance < threshold)
+    if verbose:
+        print(f"frame variance: {round(variance)}")
+    test_lst.append(int(variance))
+    return result
+
