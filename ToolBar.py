@@ -1,5 +1,5 @@
 from PyQt6.QtWidgets import (
-    QWidget, QVBoxLayout, QLineEdit, QPushButton, QLabel,
+    QWidget, QVBoxLayout, QLineEdit, QPushButton, QLabel, QSlider,
     QSizePolicy, QHBoxLayout, QFrame, QComboBox, QApplication, QCheckBox, QFileDialog
 )
 from PyQt6.QtGui import QRegularExpressionValidator, QIntValidator
@@ -37,6 +37,11 @@ class Toolbar(QWidget):
         self.wait_timer.setInterval(500)
         self.wait_timer.setSingleShot(True)
         self.wait_timer.timeout.connect(self.render_single_frame)
+
+        self.debounce_slider_timer = QTimer(self)
+        self.debounce_slider_timer.setInterval(500)
+        self.debounce_slider_timer.setSingleShot(True)
+        self.debounce_slider_timer.timeout.connect(lambda: self.cmap_change())
 
         self.rendering = False
         self.max_frames = 0
@@ -114,6 +119,11 @@ class Toolbar(QWidget):
         self.cmap_box.addItems(top_colormaps)
         self.cmap_box.currentTextChanged.connect(lambda: self.cmap_change())
         layout.addWidget(self.cmap_box)
+
+        self.shift_slider = QSlider(Qt.Orientation.Horizontal, self)
+        self.shift_slider.setRange(0, 255)
+        self.shift_slider.valueChanged.connect(lambda: self.debounce_slider())
+        layout.addWidget(self.shift_slider)
 
         # Separator
         separator = QFrame()
@@ -246,6 +256,11 @@ class Toolbar(QWidget):
         self.update_render()
         self.update_time()
 
+    def debounce_slider(self):
+        if self.debounce_slider_timer.isActive():
+            self.debounce_slider_timer.stop()
+        self.debounce_slider_timer.start()
+
     def update_preset_dropdown(self):
         self.preset.clear()
         uuids = [str(x) for x in self.libary.uuids()]
@@ -335,6 +350,10 @@ class Toolbar(QWidget):
         self.wait_timer.start()
 
     @property
+    def shift(self) -> int:
+        return self.shift_slider.value()
+
+    @property
     def a(self) -> float:
         return float(self.input_a.text())
 
@@ -377,9 +396,11 @@ class Toolbar(QWidget):
         if self.invert:
             colors = colors[::-1]
 
+        colors = np.roll(colors, self.shift)
         if self.h_normalized is not None:
             im = to_img(self.h_normalized, colors)
             self.parent_.canvas.display_image(im)
+
         else:
             try:
                 self.h_normalized = self.parent_.new_render(self.resolution, self.a, self.b, self.iterations, colors=colors, percentile=self.percentile)
