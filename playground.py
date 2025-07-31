@@ -1,5 +1,5 @@
-from api import sinspace, cosspace, bpmspace, Performance_Renderer
-from utils import ColorMap
+from script.api import sinspace, cosspace, bpmspace, Performance_Renderer
+from script.utils import ColorMap
 import numpy as np
 
 

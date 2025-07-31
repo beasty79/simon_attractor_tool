@@ -5,16 +5,16 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtGui import QRegularExpressionValidator, QIntValidator
 from PyQt6.QtCore import QTimer, Qt, QRegularExpression
 from PyQt6.QtCore import QThread, pyqtSignal
-from VideoWriter import VideoFileWriter
-from effecient_render import Renderer
-if 0!=0: from main import MainWindow
+from script.VideoWriter import VideoFileWriter
+from script.effecient_render import Renderer
+if 0!=0: from ui.main import MainWindow
 from numpy.typing import NDArray
 import matplotlib.pyplot as plt
-from Better_dropdown import BetterDropDown
+from ui.Better_dropdown import BetterDropDown
 from time import time
 import numpy as np
-from effecient_render import to_img
-from point import Point, Animation, Libary
+from script.effecient_render import to_img
+from ui.point import Point, Animation, Libary
 
 # cmap
 top_colormaps = [

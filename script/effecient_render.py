@@ -1,5 +1,5 @@
-from VideoWriter import VideoFileWriter
-from simon import render_raw, to_img
+from script.VideoWriter import VideoFileWriter
+from script.simon import render_raw, to_img
 from numpy.typing import NDArray
 import multiprocessing
 from time import time

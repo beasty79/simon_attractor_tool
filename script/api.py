@@ -1,13 +1,13 @@
-from simon import render_raw, to_img
-from VideoWriter import VideoFileWriter_Stream
-from counter import TerminalCounter
+from script.simon import render_raw, to_img
+from script.VideoWriter import VideoFileWriter_Stream
+from script.counter import TerminalCounter
 from numpy.typing import NDArray
 from typing import Any
 import multiprocessing
 from time import time
 import numpy as np
 import os
-from utils import promt, ColorMap
+from script.utils import promt, ColorMap
 
 
 class Performance_Renderer:

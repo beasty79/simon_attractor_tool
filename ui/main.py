@@ -1,19 +1,16 @@
-from PyQt6.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QWidget, QHBoxLayout
-# from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
+from PyQt6.QtWidgets import QApplication, QMainWindow, QWidget, QHBoxLayout
 from PyQt6.QtWidgets import QSizePolicy
-# from matplotlib.figure import Figure
-from simon import render_raw, to_img
 from PyQt6.QtCore import Qt, QEvent
 from PyQt6.QtGui import QKeyEvent
+
+from script.simon import render_raw, to_img
+from ui.Canvas import MainCanvas, MultipleDisplays
+from ui.ToolBar import Toolbar
+
 from numpy.typing import NDArray
-from ToolBar import Toolbar
 from os import path
 import sys
-from Canvas import MainCanvas, MultipleDisplays
-import sys
-import os
-script_dir = os.path.dirname(os.path.abspath(__file__))
-os.chdir(script_dir)
+
 
 mini_cmaps = [
     "viridis",

@@ -8,7 +8,7 @@ from PyQt6.QtGui import QResizeEvent
 import numpy as np
 import matplotlib.pyplot as plt
 from dataclasses import dataclass
-from simon import to_img
+from script.simon import to_img
 
 
 def get_colors(cmap: str) -> NDArray:
