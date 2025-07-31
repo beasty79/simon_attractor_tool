@@ -5,9 +5,30 @@ from numpy.typing import NDArray
 from typing import Any
 import multiprocessing
 from time import time
+from PyQt6.QtCore import pyqtBoundSignal
 import numpy as np
 import os
-from script.utils import promt, ColorMap
+from script.utils import promt
+from script.api import ColorMap
+import matplotlib.pyplot as plt
+
+
+class ColorMap:
+    def __init__(self, name: str, inverted: bool = False) -> None:
+        self.color = self.get_colors_array(name)
+        self.inverted = inverted
+
+    def set_inverted(self, state: bool):
+        self.inverted = state
+
+    def get_colors_array(self, cmap: str) -> NDArray:
+        color_map = plt.get_cmap(cmap)
+        linear = np.linspace(0, 1, 256)
+        return color_map(linear)
+
+    def get(self) -> NDArray:
+        return self.color[::-1] if self.inverted else self.color
+
 
 def _render_wrapper(args):
     h, _ = render_raw(*args[:-1])
@@ -47,6 +68,7 @@ class Performance_Renderer:
         self.color = None
         self.counter: TerminalCounter | None = None
         self.colormap: ColorMap = colormap
+        self.hook: pyqtBoundSignal | None = None
 
     def set_static(self, argument: Any, is_static: bool):
         """
@@ -55,6 +77,9 @@ class Performance_Renderer:
         if argument not in self.static:
             raise ValueError(f"arg: {argument} is invalid, should be: ['a', 'b', 'n', 'resolution', 'percentile']")
         self.static[argument] = is_static
+
+    def addHook(self, signal: pyqtBoundSignal):
+        self.hook = signal
 
     def get_iter_value(self, arg: str) -> list[Any]:
         if arg not in self.static:
@@ -79,11 +104,7 @@ class Performance_Renderer:
             new_name = os.path.join(base_path, name_comp)
         return new_name
 
-    def start_render_process(self, fname: str, verbose_image = False, threads: int | None = 4, chunksize = 4, skip_empty_frames = True):
-        # filter wrapper
-
-
-        # get values
+    def start_render_process(self, fname: str, verbose_image = False, threads: int | None = 4, chunksize = 4, skip_empty_frames = True, bypass_confirm = False):
         res: list[int] = self.get_iter_value("resolution")
         a: list[int] = self.get_iter_value("a")
         b: list[int] = self.get_iter_value("b")
@@ -95,13 +116,16 @@ class Performance_Renderer:
         # checks and promting
         args = list(zip(res, a, b, n, percentile, col))
         assert all(len(lst) == len(res) for lst in [a, b, n, percentile, col]), "Mismatched lengths in input lists"
-        promt(self.frames, self.fps)
+        if not bypass_confirm:
+            promt(self.frames, self.fps)
 
         # prepare path
-        assert "/" not in fname and "\\" not in fname
-        fname = f"./render/{fname}"
+        if "/" not in fname and "\\" not in fname:
+            fname = f"./render/{fname}"
+
         if ".mp4" not in fname:
             fname = f"{fname}.mp4"
+        print(fname)
 
         # File Writer
         self.writer = VideoFileWriter_Stream(
@@ -112,17 +136,31 @@ class Performance_Renderer:
         # Terminal Feedback
         tstart = time()
         self.counter = TerminalCounter(self.frames)
+        if self.hook is None:
+            self.counter.start()
 
         # Multiproccessing
-        with multiprocessing.Pool(threads) as pool:
-            for i, (img, collapsed) in enumerate(pool.imap(_render_wrapper, args, chunksize=chunksize)):
-                self.counter.count_up()
-                if collapsed and skip_empty_frames:
-                    continue
-                if verbose_image:
-                    self.writer.add_frame(img, a=a[i], b=b[i])
-                else:
-                    self.writer.add_frame(img)
+        try:
+            with multiprocessing.Pool(threads) as pool:
+                for i, (img, collapsed) in enumerate(pool.imap(_render_wrapper, args, chunksize=chunksize)):
+
+                    # Either Signal or Terminal
+                    if self.hook is not None:
+                        self.hook.emit(i)
+                    else:
+                        self.counter.count_up()
+
+                    # filter
+                    if collapsed and skip_empty_frames:
+                        continue
+
+                    # write a, b
+                    if verbose_image:
+                        self.writer.add_frame(img, a=a[i], b=b[i])
+                    else:
+                        self.writer.add_frame(img)
+        except Exception:
+            raise ValueError("use set_static('a', False) for every attribute you give as an array")
 
         # Process Finished
         total = time() - tstart
@@ -185,7 +223,13 @@ def map_area(a: NDArray, b: NDArray, fname: str, colormap: ColorMap, skip_empty:
     """Generates a animation over a whole area. a, b are the axis (uses np.meshgrid)"""
     assert len(a) == len(b), "a & b dont match in length"
     A, B = np.meshgrid(a, b)
-    A = A.ravel()
+
+    for i in range(A.shape[0]):
+        if i % 2 == 1:
+            A[i] = A[i][::-1]
+    A = A.flatten()
+
+    # A = A.ravel()
     B = B.ravel()
     process = Performance_Renderer(
         a=A,
@@ -197,4 +241,6 @@ def map_area(a: NDArray, b: NDArray, fname: str, colormap: ColorMap, skip_empty:
         n=n,
         resolution=resolution
     )
+    process.set_static("a", False)
+    process.set_static("b", False)
     process.start_render_process(fname, verbose_image=True, threads=4, chunksize=8, skip_empty_frames=skip_empty)

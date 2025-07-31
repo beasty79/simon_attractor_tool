@@ -1,7 +1,8 @@
-from script.api import sinspace, cosspace, bpmspace, Performance_Renderer
-from script.utils import ColorMap
+from script.api import (
+    sinspace, cosspace, bpmspace, map_area,
+    Performance_Renderer, ColorMap
+)
 import numpy as np
-import multiprocessing
 
 
 def example():
@@ -38,14 +39,18 @@ def example():
 
 
 def main():
-    # map_area(a, b, "./render/map_full_10k.mp4", ColorMap("viridis"))
-    fps = 30
+    # a = np.linspace(-0.084, -0.1, 30)
+    # b = np.linspace(1.85, 1.875, 30)
+    # map_area(a, b, "map_small_area", ColorMap("viridis"), n=1_000_000, skip_empty=False)
+
+    fps = 10
     t = 30
     frames = fps * t
 
-    a = sinspace(-0.067, -0.099, frames, p=4)
-    b = bpmspace(1.866, 1.867, frames, 150, fps)
-    # b = cosspace(1.854, 1.873, frames)
+    # a = sinspace(-0.067, -0.099, frames, p=4)
+    a = bpmspace(-0.0759, -0.076, frames, 120, fps)
+    # b = bpmspace(1.866, 1.867, frames, 150, fps)
+    b = sinspace(1.854, 1.873, frames)
 
     cmap = ColorMap("viridis", True)
     process = Performance_Renderer(
@@ -54,13 +59,13 @@ def main():
         colormap=cmap,
         frames=frames,
         fps=fps,
-        percentile=99,
-        n=1_000_000,
+        percentile=99.6,
+        n=7_000_000,
         resolution=1000
     )
     process.set_static("a", False)
     process.set_static("b", False)
-    process.start_render_process("render.mp4", verbose_image=False, threads=8)
+    process.start_render_process("render.mp4", verbose_image=True, threads=12)
 
 if __name__ == "__main__":
     main()

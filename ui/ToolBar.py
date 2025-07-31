@@ -7,7 +7,9 @@ from PyQt6.QtCore import QTimer, Qt, QRegularExpression
 from script.VideoWriter import VideoFileWriter
 from ui.Better_dropdown import BetterDropDown
 from ui.point import Point, Animation, Libary
-from script.effecient_render import Renderer
+# from script.effecient_render import Renderer
+from script.api import Performance_Renderer, ColorMap
+from script.utils import make_filename, get_save_filename
 from PyQt6.QtCore import QThread, pyqtSignal
 from script.effecient_render import to_img
 if 0!=0: from ui.main import MainWindow
@@ -256,6 +258,40 @@ class Toolbar(QWidget):
         self.update_render()
         self.update_time()
 
+    @property
+    def shift(self) -> int:
+        return self.shift_slider.value()
+
+    @property
+    def a(self) -> float:
+        return float(self.input_a.text())
+
+    @property
+    def b(self) -> float:
+        return float(self.input_b.text())
+
+    @property
+    def iterations(self) -> int:
+        return int(self.input_n.text())
+
+    @property
+    def invert(self) -> bool:
+        return self.invert_checkbox.isChecked()
+
+    @property
+    def percentile(self) -> float:
+        x = float(self.input_percentile.text())
+        if x > 100:
+            return 100
+        elif x < 0:
+            return 0
+        return x
+
+    @property
+    def resolution(self) -> int:
+        res = int(self.input_res.text())
+        return res if res > 0 else 10
+
     def debounce_slider(self):
         if self.debounce_slider_timer.isActive():
             self.debounce_slider_timer.stop()
@@ -328,9 +364,10 @@ class Toolbar(QWidget):
         total = frames / fps
         self.video_time_label.setText(f"Video length: {total:.0f}s")
 
-    def update_display(self, frame: int, a: float, b:float):
+    def update_display(self, frame: int, a: float | None = None, b: float | None = None):
         self.label_framecount.setText(f"{frame}/{self.max_frames}")
-        self.label_ab.setText(f"a, b: ({a:.3f}, {b:.3f})")
+        if a is not None and b is not None:
+            self.label_ab.setText(f"a, b: ({a:.3f}, {b:.3f})")
 
     def next_cmap(self):
         length = len(self.cmap_box)
@@ -349,39 +386,6 @@ class Toolbar(QWidget):
             self.wait_timer.stop()
         self.wait_timer.start()
 
-    @property
-    def shift(self) -> int:
-        return self.shift_slider.value()
-
-    @property
-    def a(self) -> float:
-        return float(self.input_a.text())
-
-    @property
-    def b(self) -> float:
-        return float(self.input_b.text())
-
-    @property
-    def iterations(self) -> int:
-        return int(self.input_n.text())
-
-    @property
-    def invert(self) -> bool:
-        return self.invert_checkbox.isChecked()
-
-    @property
-    def percentile(self) -> float:
-        x = float(self.input_percentile.text())
-        if x > 100:
-            return 100
-        elif x < 0:
-            return 0
-        return x
-
-    @property
-    def resolution(self) -> int:
-        res = int(self.input_res.text())
-        return res if res > 0 else 10
 
     def get_colors(self, cmap=None) -> NDArray:
         if cmap is not None:
@@ -453,13 +457,15 @@ class Toolbar(QWidget):
         self.colors = cmap(linear)
         if invert:
             self.colors = self.colors[::-1]
-        self.writer = VideoFileWriter(fname, fps=fps)
-        self.parent_.generate_infodump(self.writer.filename, a_1, a_2, b_1, b_2, n, cmap_name)
         if use_performance_mode:
-            self.worker = RenderWorker(self.values_a, self.values_b, fname, fps, self.colors, res, n, percentile, buffer)
+            self.parent_.generate_infodump(self.writer.filename, a_1, a_2, b_1, b_2, n, cmap_name)
+            self.worker = RenderWorker(self.values_a, self.values_b, fname, fps, self.cmap_box.currentText(), res, n, percentile, invert=self.invert_checkbox.isChecked())
+            self.worker.progress.connect(lambda x: self.update_display(x, 0, 0))
             self.worker.finished.connect(self.on_render_done)
             self.worker.start()
         else:
+            self.writer = VideoFileWriter(fname, fps=fps)
+            self.parent_.generate_infodump(self.writer.filename, a_1, a_2, b_1, b_2, n, cmap_name)
             self.t1 = time()
             self.frame_index = 0
             self.animation_params = {"res": res, "n": n}
@@ -468,11 +474,11 @@ class Toolbar(QWidget):
             self.max_frames = frames
 
     def on_render_done(self, elapsed, frame_count):
+        self.rendering = False
         minutes = int(elapsed // 60)
         seconds = elapsed % 60
         per_frame = round(elapsed / frame_count, 2)
         print(f"Render of {frame_count} frames took {minutes}:{seconds:.0f}s = {per_frame}s per frame")
-
 
     def next_frame(self):
         # finished
@@ -497,50 +503,31 @@ class Toolbar(QWidget):
         self.parent_.new_render(res, a, b, n, self.percentile, self.colors)
         self.frame_index += 1
 
-def make_filename(a_1, a_2, b_1, b_2, extension="mp4"):
-    parts = []
-    if a_1 != a_2:
-        parts.append(f"a_{a_1}-{a_2}")
-    if b_1 != b_2:
-        parts.append(f"b_{b_1}-{b_2}")
-
-    fname = "_".join(parts) + f".{extension}"
-    return fname
-
-
-def get_save_filename(cls):
-    file_path, _ = QFileDialog.getSaveFileName(
-        parent=cls,
-        caption="Save Video File",
-        filter="MP4 files (*.mp4);;All Files (*)",
-        directory="render.mp4"
-    )
-    return file_path
-
 
 class RenderWorker(QThread):
     finished = pyqtSignal(float, int)
+    progress = pyqtSignal(int)
 
-    def __init__(self, values_a, values_b, fname, fps, colors, res, n, percentile, buff_size=None):
+    def __init__(self, values_a, values_b, fname, fps, colormap_name, res, n, percentile, invert: bool = False, verbose = False):
         super().__init__()
         self.values_a = values_a
         self.values_b = values_b
         self.fname = fname
         self.fps = fps
-        self.colors = colors
+        self.cmap_name = colormap_name
         self.res = res
         self.n = n
         self.percentile = percentile
-        self.buff_size = buff_size if buff_size is not None else 10
+        self.verbose = verbose
+
+        # init Multiproccessin Renderer
+        self.renderer = Performance_Renderer(values_a, values_b, ColorMap(self.cmap_name, invert), len(values_a), fps, n, res, percentile)
+        self.renderer.set_static("a", False)
+        self.renderer.set_static("b", False)
+        self.renderer.addHook(self.progress)
 
     def run(self):
         t1 = time()
-        renderer = Renderer(self.values_a, self.values_b, self.fname, self.fps, self.colors, self.res, self.n, self.percentile)
-        renderer.render_all_frames()
+        self.renderer.start_render_process(self.fname, verbose_image=self.verbose, threads=8, chunksize=8, skip_empty_frames=False, bypass_confirm=True)
         elapsed = time() - t1
-        frame_count = len(self.values_a)
-        self.finished.emit(elapsed, frame_count)
-
-# points
-# b=1.5 a=[.3;.45]
-#
+        self.finished.emit(elapsed, len(self.values_a))
