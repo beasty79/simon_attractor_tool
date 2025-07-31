@@ -9,6 +9,15 @@ import numpy as np
 import os
 from script.utils import promt, ColorMap
 
+def _render_wrapper(args):
+    h, _ = render_raw(*args[:-1])
+    img = to_img(h, args[-1])
+
+    # Filter frames
+    non_zero = np.count_nonzero(h)
+    pixel: int = args[0]
+    thresh = pixel ** 2 * 0.05
+    return img, non_zero < thresh
 
 class Performance_Renderer:
     """This is an api wrapper class for rendering simon attractors"""
@@ -72,15 +81,7 @@ class Performance_Renderer:
 
     def start_render_process(self, fname: str, verbose_image = False, threads: int | None = 4, chunksize = 4, skip_empty_frames = True):
         # filter wrapper
-        def _render_wrapper(args):
-            h, _ = render_raw(*args[:-1])
-            img = to_img(h, args[-1])
 
-            # Filter frames
-            non_zero = np.count_nonzero(h)
-            pixel: int = args[0]
-            thresh = pixel ** 2 * 0.05
-            return img, non_zero < thresh
 
         # get values
         res: list[int] = self.get_iter_value("resolution")

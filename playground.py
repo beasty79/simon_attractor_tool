@@ -1,6 +1,7 @@
 from script.api import sinspace, cosspace, bpmspace, Performance_Renderer
 from script.utils import ColorMap
 import numpy as np
+import multiprocessing
 
 
 def example():
@@ -38,21 +39,27 @@ def example():
 
 def main():
     # map_area(a, b, "./render/map_full_10k.mp4", ColorMap("viridis"))
+    fps = 30
+    t = 30
+    frames = fps * t
 
-    a = sinspace(-0.067, -0.099, 1500, p=4)
-    b = sinspace(1.854, 1.873, 1500)
+    a = sinspace(-0.067, -0.099, frames, p=4)
+    b = bpmspace(1.866, 1.867, frames, 150, fps)
+    # b = cosspace(1.854, 1.873, frames)
 
     cmap = ColorMap("viridis", True)
     process = Performance_Renderer(
         a=a,
         b=b,
         colormap=cmap,
-        frames=len(a),
-        fps=60,
+        frames=frames,
+        fps=fps,
         percentile=99,
-        n=5_000_000,
+        n=1_000_000,
         resolution=1000
     )
+    process.set_static("a", False)
+    process.set_static("b", False)
     process.start_render_process("render.mp4", verbose_image=False, threads=8)
 
 if __name__ == "__main__":

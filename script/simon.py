@@ -1,7 +1,9 @@
 from numpy.typing import NDArray
 from numba import njit, prange
 from functools import wraps
-from math import sin, cos
+# from math import sin, cos
+# from math import sin, cos
+import math
 from numpy import ndarray
 from typing import Any
 import numpy as np
@@ -25,15 +27,14 @@ def iterate(a: float, b: float, n: int) -> tuple[ndarray, ndarray]:
     arr_x = np.zeros(shape=(n,), dtype=np.float64)
     arr_y = np.zeros(shape=(n,), dtype=np.float64)
     for i in range(n):
-        x_new = sin(x**2 - y**2 + a)
-        y_new = cos(2 * x * y + b)
+        x_new = math.sin(x**2 - y**2 + a)
+        y_new = math.cos(2 * x * y + b)
 
         x, y = x_new, y_new
         arr_x[i] = x
         arr_y[i] = y
 
     return arr_x, arr_y
-
 
 
 def render(colors: np.typing.NDArray[np.float32], resolution: int, a: float, b: float, n: int, percentile: float):
