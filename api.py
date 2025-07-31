@@ -1,13 +1,13 @@
 from simon import render_raw, to_img
-from VideoWriter import VideoFileWriter
+from VideoWriter import VideoFileWriter_Stream
+from counter import TerminalCounter
 from numpy.typing import NDArray
-from typing import Any, Type
+import matplotlib.pyplot as plt
+from typing import Any
 import multiprocessing
 from time import time
-import math
 import numpy as np
 import os
-import matplotlib.pyplot as plt
 
 
 class Performance_Renderer:
@@ -36,6 +36,7 @@ class Performance_Renderer:
         self.fps = fps
         self.writer = None
         self.color = None
+        self.counter: TerminalCounter | None = None
 
     def add_colormap(self, color_map: "ColorMap"):
         self.color = color_map.get()
@@ -71,7 +72,7 @@ class Performance_Renderer:
             new_name = os.path.join(base_path, name_comp)
         return new_name
 
-    def start_render_process(self, fname: str, verbose_image = False, threads: int | None = 4, chunksize = 4):
+    def start_render_process(self, fname: str, verbose_image = False, threads: int | None = 4, chunksize = 4, skip_empty_frames = True):
         if self.color is None:
             raise SyntaxError("first call: 'add_colormap'")
 
@@ -85,22 +86,22 @@ class Performance_Renderer:
         args = list(zip(res, a, b, n, percentile, col))
         assert all(len(lst) == len(res) for lst in [a, b, n, percentile, col]), "Mismatched lengths in input lists"
 
-        self.writer = VideoFileWriter(
+        self.writer = VideoFileWriter_Stream(
             filename=self.get_unique_fname(fname),
             fps=self.fps
         )
 
-        print("Render process started!")
         tstart = time()
+        self.counter = TerminalCounter(self.frames)
         with multiprocessing.Pool(threads) as pool:
             for i, (img, collapsed) in enumerate(pool.imap(render_wrapper, args, chunksize=chunksize)):
-                if collapsed:
+                self.counter.count_up()
+                if collapsed and skip_empty_frames:
                     continue
                 if verbose_image:
                     self.writer.add_frame(img, a=a[i], b=b[i])
                 else:
                     self.writer.add_frame(img)
-                print(f"Rendered frame {i + 1}/{self.frames}")
         total = time() - tstart
         min_ = int(total // 60)
         sec_ = int(total % 60)
@@ -112,13 +113,11 @@ def render_wrapper(args):
     h, _ = render_raw(*args[:-1])
     img = to_img(h, args[-1])
 
+    # Filter frames
     non_zero = np.count_nonzero(h)
-    collapsed = False
     pixel: int = args[0]
-    thresh = pixel * pixel * 0.1
-    if non_zero < thresh:
-        collapsed = True
-    return img, collapsed
+    thresh = pixel ** 2 * 0.05
+    return img, non_zero < thresh
 
 class ColorMap:
     def __init__(self, name: str) -> None:
@@ -139,9 +138,6 @@ class ColorMap:
 
 def sinspace(lower, upper, n, p=1.0):
     """
-    Generate `n` values between `lower` and `upper` in a sinusoidal pattern
-    over `p` periods.
-
     Parameters:
     - lower (float): The minimum value.
     - upper (float): The maximum value.
@@ -155,25 +151,48 @@ def sinspace(lower, upper, n, p=1.0):
     sin_wave = (np.sin(phase) + 1) / 2
     return lower + (upper - lower) * sin_wave
 
+def cosspace(lower, upper, n, p=1.0):
+    """
+    Parameters:
+    - lower (float): The minimum value.
+    - upper (float): The maximum value.
+    - n (int): Number of points in the output array.
+    - p (float): Number of sine periods to span across the interval.
+
+    Returns:
+    - np.ndarray: An array of values shaped by a cos wave between lower and upper.
+    """
+    phase = np.linspace(0, 2 * np.pi * p, n)
+    cos_wave = (np.cos(phase) + 1) / 2
+    return lower + (upper - lower) * cos_wave
+
 
 def map_area(a: NDArray, b: NDArray, fname: str, colormap: ColorMap):
     assert len(a) == len(b), "a & b dont match in length"
     A, B = np.meshgrid(a, b)
     A = A.ravel()
     B = B.ravel()
+    fps = 15
+    promt(len(A), fps, len(A) / fps)
     process = Performance_Renderer(
-        a=a,
-        b=b,
-        frames=len(a),
-        fps=10,
+        a=A,
+        b=B,
+        frames=len(A),
+        fps=fps,
         percentile=99,
-        n=6000000
+        n=1_000_000
     )
     process.add_colormap(colormap)
-    process.start_render_process(fname, verbose_image=True)
+    process.start_render_process(fname, verbose_image=True, threads=4, chunksize=8)
 
 
-def main():
+def promt(frames, fps, t):
+    print(f"{frames=} {fps=} {t=:.0f}")
+    accept = input("Enter y or yes to Continue: ")
+    if accept not in ["y", "Y", "yes", "Yes", "YES"]:
+        exit(0)
+
+def main_():
     t = 1 * 60
     fps = 60
     frames = t * fps
@@ -183,29 +202,89 @@ def main():
     if accept not in ["y", "Y", "yes", "Yes", "YES"]:
         return
 
-    a = sinspace(0.333, 0.35, frames, p=1)
-    b = sinspace(1.45, 1.55, frames, p=2)
+    a = sinspace(0.333, 0.35, frames, p=2)
+    b = cosspace(1.45, 1.55, frames, p=2)
     # b = np.linspace(1.5, 1.5, frames)
     bpm = 145
     minutes = t / 60
     periods = minutes * bpm
 
-    percentile = sinspace(98.25, 98.25, frames, p=periods)
+    percentile = sinspace(98.25, 98.75, frames, p=periods)
     process = Performance_Renderer(
         a=a,
         b=b,
         frames=frames,
         fps=fps,
         percentile=percentile,
-        n=1_000_000
-        # n=7000000
+        n=5_000_000,
+        resolution=1200
+    )
+    process.set_static("a", False)
+    process.set_static("b", False)
+    process.set_static("percentile", False)
+
+    cmap = ColorMap("cubehelix")
+    cmap.set_inverted(True)
+    # (resolution=1k) per frame 2.8Mb
+
+    process.add_colormap(cmap)
+    process.start_render_process("./render/osc.mp4", verbose_image=True, threads=8, chunksize=4)  # max memory usage is threads * chunksize * 2.8Mb
+
+def project():
+    t = 1 * 120
+    fps = 100
+    frames = t * fps
+    # frames = 300
+    print(f"{frames=} {fps=} {t=}")
+    accept = input("Enter y or yes to Continue: ")
+    if accept not in ["y", "Y", "yes", "Yes", "YES"]:
+        return
+
+    a = sinspace(0.33, 0.36, frames, p=4)
+    b = cosspace(1.45, 1.55, frames, p=2)
+
+    bpm = 155
+    minutes = t / 60
+    periods = minutes * bpm
+
+    percentile = sinspace(98.75, 99.35, frames, p=periods)
+    process = Performance_Renderer(
+        a=a,
+        b=b,
+        frames=frames,
+        fps=fps,
+        percentile=percentile,
+        n=10_000_000,
+        resolution=1500
     )
     process.set_static("percentile", False)
-    cmap = ColorMap("cubehelix")
+    cmap = ColorMap("twilight")
     cmap.set_inverted(True)
 
     process.add_colormap(cmap)
-    process.start_render_process("./render/osc.mp4", verbose_image=True, threads=12, chunksize=4)
+    process.start_render_process("./render/osc.mp4", verbose_image=False, threads=10, chunksize=4)
+
+
+def main():
+    # project()
+
+    a = np.linspace(-0.067, -0.099, 1500)
+    b = np.linspace(1.854, 1.873, 1500)
+
+    # map_area(a, b, "./render/map_full_10k.mp4", ColorMap("viridis"))
+    process = Performance_Renderer(
+        a=a,
+        b=b,
+        frames=len(a),
+        fps=60,
+        percentile=99,
+        n=5_000_000,
+        resolution=1000
+    )
+    cmap = ColorMap("viridis")
+    cmap.set_inverted(True)
+    process.add_colormap(cmap)
+    process.start_render_process("./render/render.mp4", verbose_image=False, threads=8)
 
 if __name__ == "__main__":
     main()

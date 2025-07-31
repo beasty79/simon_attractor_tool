@@ -35,6 +35,13 @@
         ]
     },
     {
+        "type": "Point",
+        "origin": [
+            -0.08,
+            1.854
+        ]
+    },
+    {
         "type": "Animation",
         "origin": [
             0.3,
