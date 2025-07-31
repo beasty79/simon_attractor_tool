@@ -33,7 +33,7 @@ def example():
 
     # (resolution=1k) per frame 2.8Mb
     # max memory usage is threads * chunksize * 2.8Mb
-    process.start_render_process("./render/osc.mp4", verbose_image=False, threads=10, chunksize=4)
+    process.start_render_process("osc.mp4", verbose_image=False, threads=10, chunksize=4)
 
 
 def main():
@@ -53,7 +53,7 @@ def main():
         n=5_000_000,
         resolution=1000
     )
-    process.start_render_process("./render/render.mp4", verbose_image=False, threads=8)
+    process.start_render_process("render.mp4", verbose_image=False, threads=8)
 
 if __name__ == "__main__":
     main()

@@ -4,17 +4,17 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtGui import QRegularExpressionValidator, QIntValidator
 from PyQt6.QtCore import QTimer, Qt, QRegularExpression
-from PyQt6.QtCore import QThread, pyqtSignal
 from script.VideoWriter import VideoFileWriter
+from ui.Better_dropdown import BetterDropDown
+from ui.point import Point, Animation, Libary
 from script.effecient_render import Renderer
+from PyQt6.QtCore import QThread, pyqtSignal
+from script.effecient_render import to_img
 if 0!=0: from ui.main import MainWindow
 from numpy.typing import NDArray
 import matplotlib.pyplot as plt
-from ui.Better_dropdown import BetterDropDown
 from time import time
 import numpy as np
-from script.effecient_render import to_img
-from ui.point import Point, Animation, Libary
 
 # cmap
 top_colormaps = [
@@ -57,7 +57,7 @@ class Toolbar(QWidget):
         self.renderer = None
         self.h_normalized = None
         self.libary = Libary()
-        self.libary.load_file("./animations.json")
+        self.libary.load_file("./data/animations.json")
         self.init_ui()
 
     def init_ui(self):

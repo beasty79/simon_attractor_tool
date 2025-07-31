@@ -96,6 +96,12 @@ class Performance_Renderer:
         assert all(len(lst) == len(res) for lst in [a, b, n, percentile, col]), "Mismatched lengths in input lists"
         promt(self.frames, self.fps)
 
+        # prepare path
+        assert "/" not in fname and "\\" not in fname
+        fname = f"./render/{fname}"
+        if ".mp4" not in fname:
+            fname = f"{fname}.mp4"
+
         # File Writer
         self.writer = VideoFileWriter_Stream(
             filename=self.get_unique_fname(fname),
