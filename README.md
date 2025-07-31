@@ -14,7 +14,7 @@ A Python-based tool and API for generating and animating the **Simon Attractor**
 - Generate static or animated visualizations of the Simon Attractor
 - Customizable parameters (`a`, `b`, iterations, resolution, colors)
 - helper functions like sinspace, cosspace, bpmspace work similar as np.linspace
-- CLI and API access
+- GUI and API access
 - Save as `.png`, or `.mp4`
 - Matplotlib and NumPy based (no heavy dependencies)
 
