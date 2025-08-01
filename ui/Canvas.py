@@ -3,7 +3,7 @@ from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 from PyQt6.QtWidgets import QSizePolicy
 from matplotlib.figure import Figure
 from numpy.typing import NDArray
-from PyQt6.QtCore import Qt, pyqtSignal
+from PyQt6.QtCore import Qt, pyqtSignal, QTimer
 from PyQt6.QtGui import QResizeEvent
 import numpy as np
 import matplotlib.pyplot as plt
@@ -17,7 +17,7 @@ def get_colors(cmap: str) -> NDArray:
     return color_map(linear)
 
 
-class MplCanvas(FigureCanvas):
+class MlpCanvas(FigureCanvas):
     clicked = pyqtSignal(bool)
 
     def __init__(self, parent=None):
@@ -48,9 +48,16 @@ class MplCanvas(FigureCanvas):
 
 class MultipleDisplays(QWidget):
     canvasSelected = pyqtSignal(str)
-    def __init__(self, parent: QWidget | None, displays: int = 4, colormap_names: list[str] = 4 * ["cividis"]) -> None:
+    def __init__(self, parent: QWidget | None, displays: int = 4, colormap_names: list[str] = 4 * ["cividis"], vertical = True) -> None:
         super().__init__(parent)
-        layout = QVBoxLayout(self)
+        if vertical:
+            layout = QVBoxLayout(self)
+            self.setFixedWidth(250)
+        else:
+            layout = QHBoxLayout(self)
+            # self.setMinimumWidth(900)
+            self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+
         layout.setContentsMargins(0, 0, 0, 0)
         self.inverted = False
         self.setContentsMargins(0, 0, 0, 0)
@@ -60,17 +67,21 @@ class MultipleDisplays(QWidget):
         self.colormaps_name = colormap_names
         self.colormaps = [get_colors(cmap) for cmap in self.colormaps_name]
         self.setStyleSheet("background-color: rgb(100, 100, 100);")
+        self.vertical = vertical
 
-        self.canvase: list[MplCanvas] = []
+        self.canvase: list[MlpCanvas] = []
         for i in range(self.displays):
-            canvas = MplCanvas(self)
+            canvas = MlpCanvas(self)
             canvas.clicked.connect(lambda _, i=i: self.canvasSelected.emit(self.colormaps_name[i]))
             self.canvase.append(canvas)
-            layout.addWidget(canvas)
-        self.setFixedWidth(250)
+            canvas.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+
+            layout.addWidget(canvas, stretch=1)
+
         self.h_normalized: None | np.typing.NDArray = None
 
     def display_raw_image(self, raw: np.typing.NDArray, display_index: int, inverted: bool):
+        """keeps normalized img [0-1] in memory for further changes"""
         cmap = self.colormaps[display_index]
         if inverted:
             cmap = cmap[::-1]
@@ -99,14 +110,37 @@ class MultipleDisplays(QWidget):
             self.canvase[i].display_image(img)
 
     def resizeEvent(self, a0) -> None:
-        h = self.height()
-        new_w = round(h / 4)
-        self.resize(new_w, h)
+        if self.vertical:
+            h = self.height()
+            new_w = round(h / 4)
+            self.resize(new_w, h)
+
+class DualDisplay(MultipleDisplays):
+    def __init__(self, parent: QWidget | None, colormap_names: list[str]) -> None:
+        super().__init__(parent, 2, colormap_names, vertical=False)
+
+
+    def hideWindow(self, index: int = 1):
+        if 0 <= index < len(self.canvase):
+            canvas: MlpCanvas = self.canvase[index]
+            canvas.hide()
+
+            layout = self.layout()
+            if layout is not None:
+                layout.invalidate()
+
+    def showWindow(self, index: int = 1):
+        if index < 0 and index >= len(self.canvase):
+            return
+
+        canvas: MlpCanvas = self.canvase[index]
+        canvas.show()
+
 
 class MainCanvas(QWidget):
     def __init__(self, parent: QWidget | None) -> None:
         super().__init__(parent)
-        self.mainCanvas = MplCanvas(self)
+        self.mainCanvas = MlpCanvas(self)
         layout = QHBoxLayout(self)
         layout.setAlignment(Qt.AlignmentFlag.AlignVCenter)
         layout.setContentsMargins(0, 0, 0, 0)

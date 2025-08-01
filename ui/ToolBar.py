@@ -12,7 +12,7 @@ from script.api import Performance_Renderer, ColorMap
 from script.utils import make_filename, get_save_filename
 from PyQt6.QtCore import QThread, pyqtSignal
 from script.effecient_render import to_img
-if 0!=0: from ui.main import MainWindow
+if 0!=0: from ui.app import MainWindow
 from numpy.typing import NDArray
 import matplotlib.pyplot as plt
 from time import time
@@ -402,7 +402,7 @@ class Toolbar(QWidget):
         colors = np.roll(colors, self.shift)
         if self.h_normalized is not None:
             im = to_img(self.h_normalized, colors)
-            self.parent_.canvas.display_image(im)
+            self.parent_.canvas.display(0, im)
 
         else:
             try:

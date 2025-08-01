@@ -4,7 +4,7 @@ from PyQt6.QtCore import Qt, QEvent
 from PyQt6.QtGui import QKeyEvent
 
 from script.simon import render_raw, to_img
-from ui.Canvas import MainCanvas, MultipleDisplays
+from ui.Canvas import MainCanvas, MultipleDisplays, DualDisplay
 from ui.ToolBar import Toolbar
 
 from numpy.typing import NDArray
@@ -30,6 +30,7 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.init_ui()
         self.toolbar.update_()
+        self.toggle_cache = True
         instance = QApplication.instance()
         if instance is not None:
             instance.installEventFilter(self)
@@ -54,7 +55,8 @@ class MainWindow(QMainWindow):
         self.toolbar.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Expanding)
         main_layout.addWidget(self.toolbar, stretch=0)
 
-        self.canvas = MainCanvas(self)
+        self.canvas = DualDisplay(self, ["viridis", "cividis"])
+        # self.canvas = MainCanvas(self)
         main_layout.addWidget(self.canvas, stretch=1)
 
         self.minicanvas_ = MultipleDisplays(self, 4, mini_cmaps)
@@ -77,7 +79,9 @@ class MainWindow(QMainWindow):
         """Renders a single frame and displys it in the UI"""
         h_normalized, _ = render_raw(res, a, b, n, percentile, 0)
         im = to_img(h_normalized, colors)
-        self.canvas.display_image(im)
+        # self.canvas.display_image(im)
+        self.canvas.display_raw_image(h_normalized, 0, True)
+        self.canvas.display_raw_image(h_normalized, 1, False)
 
         for i in range(self.minicanvas_.displays):
             self.minicanvas_.display_raw_image(h_normalized, i, self.toolbar.invert)
@@ -127,5 +131,13 @@ class MainWindow(QMainWindow):
                 return True
             elif key == Qt.Key.Key_PageDown:
                 self.toolbar.next_cmap()
+                return True
+            elif key == Qt.Key.Key_H:
+                if self.toggle_cache:
+                    self.canvas.hideWindow(1)
+                else:
+                    self.canvas.showWindow(1)
+                self.toggle_cache = not self.toggle_cache
+
                 return True
         return False
