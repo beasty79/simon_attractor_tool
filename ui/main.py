@@ -9,7 +9,6 @@ from ui.ToolBar import Toolbar
 
 from numpy.typing import NDArray
 from os import path
-import sys
 
 
 mini_cmaps = [
@@ -113,30 +112,20 @@ class MainWindow(QMainWindow):
     def eventFilter(self, a0, a1):
         if a1 is None:
             return False
-        if a1.type() == QEvent.Type.KeyPress:
-            if isinstance(a1, QKeyEvent):
-                key = a1.key()
-                if key == Qt.Key.Key_I:
-                    self.toolbar.invert_checkbox.setChecked(not self.toolbar.invert_checkbox.isChecked())
-                    self.toolbar.cmap_change()
-                    return True
+
+        if a1.type() == QEvent.Type.KeyPress and isinstance(a1, QKeyEvent):
+            key = a1.key()
+
+            if key == Qt.Key.Key_I:
+                self.toolbar.invert_checkbox.setChecked(
+                    not self.toolbar.invert_checkbox.isChecked()
+                )
+                self.toolbar.cmap_change()
+                return True
+            elif key == Qt.Key.Key_PageUp:
+                self.toolbar.prev_cmap()
+                return True
+            elif key == Qt.Key.Key_PageDown:
+                self.toolbar.next_cmap()
+                return True
         return False
-
-    def keyPressEvent(self, a0: QKeyEvent | None):
-        if a0 is None:
-            return
-
-        key = a0.key()
-        modifiers = a0.modifiers()
-        key_text = a0.text()
-
-        if key == Qt.Key.Key_PageUp:
-            self.toolbar.prev_cmap()
-        elif key == Qt.Key.Key_PageDown:
-            self.toolbar.next_cmap()
-
-if __name__ == "__main__":
-    app = QApplication(sys.argv)
-    window = MainWindow()
-    window.show()
-    sys.exit(app.exec())

@@ -9,7 +9,6 @@ from PyQt6.QtCore import pyqtBoundSignal
 import numpy as np
 import os
 from script.utils import promt
-from script.api import ColorMap
 import matplotlib.pyplot as plt
 
 

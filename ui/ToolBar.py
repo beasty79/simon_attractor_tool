@@ -17,15 +17,17 @@ from numpy.typing import NDArray
 import matplotlib.pyplot as plt
 from time import time
 import numpy as np
+from ui.threads import RenderWorker
 
 # cmap
-top_colormaps = [
-    'viridis', 'gnuplot','plasma','inferno','magma','cividis', 'terrain',
-    'turbo','coolwarm','Spectral','RdYlBu','RdYlGn','PiYG',
-    'PRGn', 'BrBG', 'PuOr', 'Set1', 'Set2', 'Set3', 'Paired', 'Pastel1', 'Pastel2', 'tab10', 'tab20', 'cubehelix', 'nipy_spectral',
-    'twilight', 'twilight_shifted', 'ocean'
-]
-
+PATH_CACHE = "./data/animations.json"
+top_colormaps = plt.colormaps()
+# top_colormaps = [
+#     'viridis', 'gnuplot','plasma','inferno','magma','cividis', 'terrain',
+#     'turbo','coolwarm','Spectral','RdYlBu','RdYlGn','PiYG',
+#     'PRGn', 'BrBG', 'PuOr', 'Set1', 'Set2', 'Set3', 'Paired', 'Pastel1', 'Pastel2', 'tab10', 'tab20', 'cubehelix', 'nipy_spectral',
+#     'twilight', 'twilight_shifted', 'ocean'
+# ]
 
 class Toolbar(QWidget):
     def __init__(self, parent):
@@ -59,7 +61,7 @@ class Toolbar(QWidget):
         self.renderer = None
         self.h_normalized = None
         self.libary = Libary()
-        self.libary.load_file("./data/animations.json")
+        self.libary.load_file(PATH_CACHE)
         self.init_ui()
 
     def init_ui(self):
@@ -82,6 +84,13 @@ class Toolbar(QWidget):
         para_1.addWidget(QLabel("b:"))
         para_1.addWidget(self.input_b)
         layout.addLayout(para_1)
+
+        # Separator
+        separator = QFrame()
+        separator.setFrameShape(QFrame.Shape.HLine)
+        separator.setFrameShadow(QFrame.Shadow.Sunken)
+        separator.setLineWidth(1)
+        layout.addWidget(separator)
 
         # add preset btn
         self.preset_btn_point = QPushButton("Add")
@@ -190,16 +199,6 @@ class Toolbar(QWidget):
         fps_layout.addWidget(label_fps)
         fps_layout.addWidget(self.fps_input)
         layout.addLayout(fps_layout)
-
-        # buffer size input
-        buffer_layout = QHBoxLayout()
-        self.buffer_input = QLineEdit("30", self)
-        self.buffer_input.setValidator(int_validator)
-        label_buffer = QLabel("Buffer Size (performance):")
-        label_buffer.setFixedWidth(150)
-        buffer_layout.addWidget(label_buffer)
-        buffer_layout.addWidget(self.buffer_input)
-        layout.addLayout(buffer_layout)
 
         # Preset
         self.preset = BetterDropDown()
@@ -437,7 +436,6 @@ class Toolbar(QWidget):
             res = int(self.input_res.text())
             n = int(self.input_n.text())
             fps = int(self.fps_input.text())
-            buffer = int(self.buffer_input.text())
             percentile = float(self.input_percentile.text())
             invert = self.invert_checkbox.isChecked()
             use_performance_mode: bool = self.performance_render.isChecked()
@@ -458,14 +456,13 @@ class Toolbar(QWidget):
         if invert:
             self.colors = self.colors[::-1]
         if use_performance_mode:
-            self.parent_.generate_infodump(self.writer.filename, a_1, a_2, b_1, b_2, n, cmap_name)
             self.worker = RenderWorker(self.values_a, self.values_b, fname, fps, self.cmap_box.currentText(), res, n, percentile, invert=self.invert_checkbox.isChecked())
             self.worker.progress.connect(lambda x: self.update_display(x, 0, 0))
             self.worker.finished.connect(self.on_render_done)
             self.worker.start()
         else:
             self.writer = VideoFileWriter(fname, fps=fps)
-            self.parent_.generate_infodump(self.writer.filename, a_1, a_2, b_1, b_2, n, cmap_name)
+            self.parent_.generate_infodump(fname, a_1, a_2, b_1, b_2, n, cmap_name)
             self.t1 = time()
             self.frame_index = 0
             self.animation_params = {"res": res, "n": n}
@@ -502,32 +499,3 @@ class Toolbar(QWidget):
             return
         self.parent_.new_render(res, a, b, n, self.percentile, self.colors)
         self.frame_index += 1
-
-
-class RenderWorker(QThread):
-    finished = pyqtSignal(float, int)
-    progress = pyqtSignal(int)
-
-    def __init__(self, values_a, values_b, fname, fps, colormap_name, res, n, percentile, invert: bool = False, verbose = False):
-        super().__init__()
-        self.values_a = values_a
-        self.values_b = values_b
-        self.fname = fname
-        self.fps = fps
-        self.cmap_name = colormap_name
-        self.res = res
-        self.n = n
-        self.percentile = percentile
-        self.verbose = verbose
-
-        # init Multiproccessin Renderer
-        self.renderer = Performance_Renderer(values_a, values_b, ColorMap(self.cmap_name, invert), len(values_a), fps, n, res, percentile)
-        self.renderer.set_static("a", False)
-        self.renderer.set_static("b", False)
-        self.renderer.addHook(self.progress)
-
-    def run(self):
-        t1 = time()
-        self.renderer.start_render_process(self.fname, verbose_image=self.verbose, threads=8, chunksize=8, skip_empty_frames=False, bypass_confirm=True)
-        elapsed = time() - t1
-        self.finished.emit(elapsed, len(self.values_a))

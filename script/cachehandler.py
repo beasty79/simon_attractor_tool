@@ -1,0 +1,1 @@
+# all renders generate an infodump which are stored in ./data/history.json
