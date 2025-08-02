@@ -108,7 +108,7 @@ class Toolbar(QWidget):
 
         # Input: iterations
         para_3 = QHBoxLayout()
-        self.input_n = QLineEdit("3000000", self)
+        self.input_n = QLineEdit("1000000", self)
         self.input_n.setValidator(int_validator)
         para_3.addWidget(QLabel("Iterations:"))
         para_3.addWidget(self.input_n)

@@ -40,9 +40,6 @@ class Animation:
         self.end = end
         self.uuid = uuid()
 
-    def __repr__(self) -> str:
-        return f"origin={self.origin}, end={self.end}"
-
     def as_tuple(self) -> tuple[Point, Point]:
         return (self.origin, self.end)
 
@@ -68,6 +65,10 @@ class Animation:
 
     def __str__(self) -> str:
         return f"a = ({self.origin.a} -> {self.end.a}) b = ({self.origin.b} -> {self.end.b})"
+
+    def __repr__(self) -> str:
+        return f"Animation[({self.origin.a} -> {self.end.a})({self.origin.b} -> {self.end.b})]"
+
 
 class Libary:
     def __init__(self) -> None:
