@@ -14,6 +14,7 @@ import matplotlib.pyplot as plt
 
 class ColorMap:
     def __init__(self, name: str, inverted: bool = False) -> None:
+        self.name = name
         self.color = self.get_colors_array(name)
         self.inverted = inverted
 
@@ -27,6 +28,9 @@ class ColorMap:
 
     def get(self) -> NDArray:
         return self.color[::-1] if self.inverted else self.color
+
+    def __repr__(self) -> str:
+        return f"Colormap['{self.name}', {self.inverted=}]"
 
 
 def _render_wrapper(args):

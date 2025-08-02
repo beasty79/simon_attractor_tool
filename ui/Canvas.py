@@ -4,6 +4,7 @@ from PyQt6.QtWidgets import QSizePolicy
 from matplotlib.figure import Figure
 from numpy.typing import NDArray
 from PyQt6.QtCore import Qt, pyqtSignal, QTimer
+from script.api import ColorMap
 from PyQt6.QtGui import QResizeEvent
 import numpy as np
 import matplotlib.pyplot as plt
@@ -47,8 +48,8 @@ class MlpCanvas(FigureCanvas):
 
 
 class MultipleDisplays(QWidget):
-    canvasSelected = pyqtSignal(str)
-    def __init__(self, parent: QWidget | None, displays: int = 4, colormap_names: list[str] = 4 * ["cividis"], vertical = True) -> None:
+    canvasSelected = pyqtSignal(ColorMap)
+    def __init__(self, parent: QWidget | None, displays: int = 4, colormaps: list[ColorMap] = 4 * [ColorMap("cividis")], vertical = True) -> None:
         super().__init__(parent)
         if vertical:
             layout = QVBoxLayout(self)
@@ -64,43 +65,37 @@ class MultipleDisplays(QWidget):
         layout.setSpacing(0)
         self.setLayout(layout)
         self.displays = displays
-        self.colormaps_name = colormap_names
-        self.colormaps = [get_colors(cmap) for cmap in self.colormaps_name]
+        self.colormaps = colormaps
         self.setStyleSheet("background-color: rgb(100, 100, 100);")
         self.vertical = vertical
 
         self.canvase: list[MlpCanvas] = []
         for i in range(self.displays):
             canvas = MlpCanvas(self)
-            canvas.clicked.connect(lambda _, i=i: self.canvasSelected.emit(self.colormaps_name[i]))
+            canvas.clicked.connect(lambda _, i=i: self.canvasSelected.emit(self.colormaps[i]))
             self.canvase.append(canvas)
             canvas.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
-
             layout.addWidget(canvas, stretch=1)
 
-        self.h_normalized: None | np.typing.NDArray = None
+        self.imgs: list[NDArray] = [np.zeros(1) for _ in range(displays)]
 
-    def display_raw_image(self, raw: np.typing.NDArray, display_index: int, inverted: bool):
+    def change_image(self, raw: NDArray, display_index: int):
         """keeps normalized img [0-1] in memory for further changes"""
         cmap = self.colormaps[display_index]
-        if inverted:
-            cmap = cmap[::-1]
-        img = to_img(raw, cmap)
+        img = to_img(raw, cmap.get())
         self.display(index=display_index, img=img)
-        self.h_normalized = raw
+        self.imgs[display_index] = raw
 
     def invert(self, inverted: bool):
-        from time import time
-        t1= time()
         if self.inverted == inverted:
-            return
-        if self.h_normalized is None:
             return
 
         for i in range(self.displays):
-            self.display_raw_image(self.h_normalized, i, inverted=inverted)
+            colormap: ColorMap = self.colormaps[i]
+            colormap.set_inverted(inverted)
+            self.setColormap(colormap, i)
+            self.update_image(i)
         self.inverted = inverted
-        print(f"took {time()-t1:.2f}s for {self.displays} displays")
 
     def display(self, index: int, img: NDArray):
         self.canvase[index].display_image(img)
@@ -109,6 +104,28 @@ class MultipleDisplays(QWidget):
         for i in range(self.displays):
             self.canvase[i].display_image(img)
 
+    def setColormap(self, new_colormap: ColorMap, index: int, update = True):
+        self.colormaps[index] = new_colormap
+        if not update:
+            return
+
+        h = self.imgs[index]
+        if h is None:
+            print("test")
+            return
+
+
+        im = to_img(h, self.colormaps[index].get())
+        self.canvase[index].display_image(im)
+
+    def update_image(self, index: int):
+        h = self.imgs[index]
+        if h is None:
+            return
+        im = to_img(h, self.colormaps[index].get())
+        canvas = self.canvase[index]
+        canvas.display_image(im)
+
     def resizeEvent(self, a0) -> None:
         if self.vertical:
             h = self.height()
@@ -116,8 +133,8 @@ class MultipleDisplays(QWidget):
             self.resize(new_w, h)
 
 class DualDisplay(MultipleDisplays):
-    def __init__(self, parent: QWidget | None, colormap_names: list[str]) -> None:
-        super().__init__(parent, 2, colormap_names, vertical=False)
+    def __init__(self, parent: QWidget | None, colormaps: list[ColorMap] = 4 * [ColorMap("cividis")]) -> None:
+        super().__init__(parent, 2, colormaps, vertical=False)
 
 
     def hideWindow(self, index: int = 1):

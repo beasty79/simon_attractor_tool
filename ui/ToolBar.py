@@ -1,14 +1,16 @@
 from PyQt6.QtWidgets import (
-    QWidget, QVBoxLayout, QLineEdit, QPushButton, QLabel, QSlider,
+    QWidget, QVBoxLayout, QLineEdit, QPushButton, QLabel,
     QSizePolicy, QHBoxLayout, QFrame, QComboBox, QApplication, QCheckBox, QFileDialog
 )
 from PyQt6.QtGui import QRegularExpressionValidator, QIntValidator
 from PyQt6.QtCore import QTimer, Qt, QRegularExpression
 from script.VideoWriter import VideoFileWriter
 from ui.Better_dropdown import BetterDropDown
+from ui.Canvas import DualDisplay
 from ui.point import Point, Animation, Libary
 # from script.effecient_render import Renderer
 from script.api import Performance_Renderer, ColorMap
+from script.simon import render_raw
 from script.utils import make_filename, get_save_filename
 from PyQt6.QtCore import QThread, pyqtSignal
 from script.effecient_render import to_img
@@ -97,9 +99,16 @@ class Toolbar(QWidget):
         self.preset_btn_point.clicked.connect(lambda: self.add_point_to_preset())
         para_1.addWidget(self.preset_btn_point)
 
+
+        # colormap
+        self.cmap_box = QComboBox(self)
+        self.cmap_box.addItems(top_colormaps)
+        self.cmap_box.currentTextChanged.connect(lambda: self.cmap_change())
+        layout.addWidget(self.cmap_box)
+
         # Input: iterations
         para_3 = QHBoxLayout()
-        self.input_n = QLineEdit("1000000", self)
+        self.input_n = QLineEdit("3000000", self)
         self.input_n.setValidator(int_validator)
         para_3.addWidget(QLabel("Iterations:"))
         para_3.addWidget(self.input_n)
@@ -125,16 +134,6 @@ class Toolbar(QWidget):
         layout.addWidget(self.invert_checkbox)
         self.invert_checkbox.checkStateChanged.connect(lambda: self.cmap_change())
 
-        # colormap
-        self.cmap_box = QComboBox(self)
-        self.cmap_box.addItems(top_colormaps)
-        self.cmap_box.currentTextChanged.connect(lambda: self.cmap_change())
-        layout.addWidget(self.cmap_box)
-
-        self.shift_slider = QSlider(Qt.Orientation.Horizontal, self)
-        self.shift_slider.setRange(0, 255)
-        self.shift_slider.valueChanged.connect(lambda: self.debounce_slider())
-        layout.addWidget(self.shift_slider)
 
         # Separator
         separator = QFrame()
@@ -258,10 +257,6 @@ class Toolbar(QWidget):
         self.update_time()
 
     @property
-    def shift(self) -> int:
-        return self.shift_slider.value()
-
-    @property
     def a(self) -> float:
         return float(self.input_a.text())
 
@@ -276,6 +271,10 @@ class Toolbar(QWidget):
     @property
     def invert(self) -> bool:
         return self.invert_checkbox.isChecked()
+
+    @property
+    def colormap(self) -> ColorMap:
+        return ColorMap(self.cmap_box.currentText(), self.invert)
 
     @property
     def percentile(self) -> float:
@@ -349,6 +348,21 @@ class Toolbar(QWidget):
 
             self._from_b.setText(str(preset.origin.b))
             self._to_b.setText(str(preset.end.b))
+
+            # self.input_a.setText(str(preset.origin.a))
+            # self.blockSignals(False)
+            # self.input_b.setText(str(preset.origin.b))
+            dual_display: DualDisplay = self.parent_.canvas
+
+            dual_display.setColormap(self.colormap, 0, update=False)
+            dual_display.setColormap(self.colormap, 1, update=False)
+
+            raw, _ = render_raw(self.resolution, preset.origin.a, preset.origin.b, self.iterations, self.percentile)
+            dual_display.change_image(raw, 0)
+
+            raw, _ = render_raw(self.resolution, preset.end.a, preset.end.b, self.iterations, self.percentile)
+            dual_display.change_image(raw, 1)
+
         self.blockSignals(False)
 
     def update_time(self):
@@ -394,23 +408,16 @@ class Toolbar(QWidget):
         linear = np.linspace(0, 1, 256)
         return color_map(linear)
 
-    def cmap_change(self):
-        colors = self.get_colors()
-        if self.invert:
-            colors = colors[::-1]
-
-        colors = np.roll(colors, self.shift)
-        if self.h_normalized is not None:
-            im = to_img(self.h_normalized, colors)
-            self.parent_.canvas.display(0, im)
-
+    def cmap_change(self, colormap = None):
+        if colormap is None:
+            self.parent_.canvas.setColormap(self.colormap, 0, update=True)
+            self.parent_.canvas.setColormap(self.colormap, 1, update=True)
         else:
-            try:
-                self.h_normalized = self.parent_.new_render(self.resolution, self.a, self.b, self.iterations, colors=colors, percentile=self.percentile)
-            except ValueError:
-                return
+            self.parent_.canvas.setColormap(colormap, 0, update=True)
+            self.parent_.canvas.setColormap(colormap, 1, update=True)
+        self.parent_.minicanvas.invert(self.invert)
+        self.parent_.minicanvas_.invert(self.invert)
 
-        self.parent_.invert_minidiplays(self.invert)
 
     def render_single_frame(self):
         t1 = time()

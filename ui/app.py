@@ -6,6 +6,7 @@ from PyQt6.QtGui import QKeyEvent
 from script.simon import render_raw, to_img
 from ui.Canvas import MainCanvas, MultipleDisplays, DualDisplay
 from ui.ToolBar import Toolbar
+from script.api import ColorMap
 
 from numpy.typing import NDArray
 from os import path
@@ -55,16 +56,25 @@ class MainWindow(QMainWindow):
         self.toolbar.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Expanding)
         main_layout.addWidget(self.toolbar, stretch=0)
 
-        self.canvas = DualDisplay(self, ["viridis", "cividis"])
+        self.canvas = DualDisplay(self)
         # self.canvas = MainCanvas(self)
         main_layout.addWidget(self.canvas, stretch=1)
 
-        self.minicanvas_ = MultipleDisplays(self, 4, mini_cmaps)
-        self.minicanvas_.canvasSelected.connect(lambda col: self.toolbar.cmap_box.setCurrentText(col))
+        cmaps_1 = [ColorMap(x) for x in mini_cmaps]
+        cmaps_2 = [ColorMap(x) for x in mini_cmaps_2]
+        self.minicanvas_ = MultipleDisplays(self, 4, cmaps_1)
+
+        def CanvasSelected(colormap: ColorMap):
+            self.toolbar.cmap_box.blockSignals(True)
+            self.toolbar.cmap_box.setCurrentText(colormap.name)
+            self.toolbar.cmap_box.blockSignals(False)
+            self.toolbar.cmap_change(colormap=colormap)
+
+        self.minicanvas_.canvasSelected.connect(lambda col: CanvasSelected(col))
         main_layout.addWidget(self.minicanvas_)
 
-        self.minicanvas = MultipleDisplays(self, 4, mini_cmaps_2)
-        self.minicanvas.canvasSelected.connect(lambda col: self.toolbar.cmap_box.setCurrentText(col))
+        self.minicanvas = MultipleDisplays(self, 4, cmaps_2)
+        self.minicanvas.canvasSelected.connect(lambda col: CanvasSelected(col))
         main_layout.addWidget(self.minicanvas)
 
 
@@ -80,14 +90,14 @@ class MainWindow(QMainWindow):
         h_normalized, _ = render_raw(res, a, b, n, percentile, 0)
         im = to_img(h_normalized, colors)
         # self.canvas.display_image(im)
-        self.canvas.display_raw_image(h_normalized, 0, True)
-        self.canvas.display_raw_image(h_normalized, 1, False)
+        self.canvas.change_image(h_normalized, 0)
+        self.canvas.change_image(h_normalized, 1)
 
         for i in range(self.minicanvas_.displays):
-            self.minicanvas_.display_raw_image(h_normalized, i, self.toolbar.invert)
+            self.minicanvas_.change_image(h_normalized, i)
 
         for i in range(self.minicanvas.displays):
-            self.minicanvas.display_raw_image(h_normalized, i, self.toolbar.invert)
+            self.minicanvas.change_image(h_normalized, i)
 
         if self.toolbar.rendering:
             self.toolbar.writer.add_frame(im)
