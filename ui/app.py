@@ -7,6 +7,7 @@ from script.simon import render_raw, to_img
 from ui.Canvas import MainCanvas, MultipleDisplays, DualDisplay
 from ui.ToolBar import Toolbar
 from script.api import ColorMap
+from ui.AnimationManagerWindow import MangerWindow
 
 from numpy.typing import NDArray
 from os import path
@@ -148,6 +149,11 @@ class MainWindow(QMainWindow):
                 else:
                     self.canvas.showWindow(1)
                 self.toggle_cache = not self.toggle_cache
-
                 return True
+
+            elif key == Qt.Key.Key_A:
+                self.window_ = MangerWindow(self.toolbar.libary)
+                self.window_.show()
+                return True
+
         return False
