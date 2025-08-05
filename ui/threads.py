@@ -1,5 +1,5 @@
 from PyQt6.QtCore import QThread, pyqtSignal
-from script.api import Performance_Renderer, ColorMap
+from attractor import Performance_Renderer, ColorMap
 from time import time
 
 class RenderWorker(QThread):

@@ -4,16 +4,12 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtGui import QRegularExpressionValidator, QIntValidator
 from PyQt6.QtCore import QTimer, Qt, QRegularExpression
-from script.VideoWriter import VideoFileWriter
 from ui.Better_dropdown import BetterDropDown
 from ui.Canvas import DualDisplay
 from ui.point import Point, Animation, Libary
 # from script.effecient_render import Renderer
-from script.api import Performance_Renderer, ColorMap
-from script.simon import render_raw
-from script.utils import make_filename, get_save_filename
-from PyQt6.QtCore import QThread, pyqtSignal
-from script.effecient_render import to_img
+from attractor import ColorMap, render_frame
+from script.utils import get_save_filename
 if 0!=0: from ui.app import MainWindow
 from numpy.typing import NDArray
 import matplotlib.pyplot as plt
@@ -53,8 +49,6 @@ class Toolbar(QWidget):
         self.max_frames = 0
 
         # Animation state
-        self.animation_timer = QTimer(self)
-        self.animation_timer.timeout.connect(self.next_frame)
         self.frame_index = 0
         self.values_a = []
         self.values_b = []
@@ -65,6 +59,8 @@ class Toolbar(QWidget):
         self.libary = Libary()
         self.libary.load_file(PATH_CACHE)
         self.init_ui()
+        self.update_render()
+        self.update_time()
 
     def init_ui(self):
         layout = QVBoxLayout()
@@ -253,8 +249,7 @@ class Toolbar(QWidget):
         self.frames.textChanged.connect(lambda: self.update_time())
         self.fps_input.textChanged.connect(lambda: self.update_time())
 
-        self.update_render()
-        self.update_time()
+
 
     @property
     def a(self) -> float:
@@ -357,10 +352,10 @@ class Toolbar(QWidget):
             dual_display.setColormap(self.colormap, 0, update=False)
             dual_display.setColormap(self.colormap, 1, update=False)
 
-            raw, _ = render_raw(self.resolution, preset.origin.a, preset.origin.b, self.iterations, self.percentile)
+            raw, _ = render_frame(self.resolution, preset.origin.a, preset.origin.b, self.iterations, self.percentile)
             dual_display.change_image(raw, 0)
 
-            raw, _ = render_raw(self.resolution, preset.end.a, preset.end.b, self.iterations, self.percentile)
+            raw, _ = render_frame(self.resolution, preset.end.a, preset.end.b, self.iterations, self.percentile)
             dual_display.change_image(raw, 1)
 
         self.blockSignals(False)
@@ -420,15 +415,18 @@ class Toolbar(QWidget):
 
 
     def render_single_frame(self):
+        print("render frame")
         t1 = time()
         QApplication.setOverrideCursor(Qt.CursorShape.BusyCursor)
         colors = self.get_colors()
         if self.invert:
             colors = colors[::-1]
         try:
-            self.h_normalized = self.parent_.new_render(self.resolution, self.a, self.b, self.iterations, colors=colors, percentile=self.percentile)
-        except ValueError:
+            self.h_normalized = self.parent_.new_render(self.resolution, self.a, self.b, self.iterations, colors=self.colormap, percentile=self.percentile)
+        except ValueError as e:
+            raise e
             return
+        print("fin")
         QApplication.restoreOverrideCursor()
         time_needed = time() - t1
         self.last_frame_sec.setText(f"Last Rendered Frame took {time_needed:.2f}s")
@@ -444,8 +442,6 @@ class Toolbar(QWidget):
             n = int(self.input_n.text())
             fps = int(self.fps_input.text())
             percentile = float(self.input_percentile.text())
-            invert = self.invert_checkbox.isChecked()
-            use_performance_mode: bool = self.performance_render.isChecked()
         except Exception as e:
             print("Invalid input:", e)
             return
@@ -457,25 +453,10 @@ class Toolbar(QWidget):
         self.values_a = np.linspace(a_1, a_2, frames)
         self.values_b = np.linspace(b_1, b_2, frames)
 
-        cmap = plt.get_cmap(self.cmap_box.currentText())
-        linear = np.linspace(0, 1, 256)
-        self.colors = cmap(linear)
-        if invert:
-            self.colors = self.colors[::-1]
-        if use_performance_mode:
-            self.worker = RenderWorker(self.values_a, self.values_b, fname, fps, self.cmap_box.currentText(), res, n, percentile, invert=self.invert_checkbox.isChecked())
-            self.worker.progress.connect(lambda x: self.update_display(x, 0, 0))
-            self.worker.finished.connect(self.on_render_done)
-            self.worker.start()
-        else:
-            self.writer = VideoFileWriter(fname, fps=fps)
-            self.parent_.generate_infodump(fname, a_1, a_2, b_1, b_2, n, cmap_name)
-            self.t1 = time()
-            self.frame_index = 0
-            self.animation_params = {"res": res, "n": n}
-            frame_delay_ms = int(1000 / 60)
-            self.animation_timer.start(frame_delay_ms)
-            self.max_frames = frames
+        self.worker = RenderWorker(self.values_a, self.values_b, fname, fps, cmap_name, res, n, percentile, invert=self.invert_checkbox.isChecked())
+        self.worker.progress.connect(lambda x: self.update_display(x, 0, 0))
+        self.worker.finished.connect(self.on_render_done)
+        self.worker.start()
 
     def on_render_done(self, elapsed, frame_count):
         self.rendering = False
@@ -483,26 +464,3 @@ class Toolbar(QWidget):
         seconds = elapsed % 60
         per_frame = round(elapsed / frame_count, 2)
         print(f"Render of {frame_count} frames took {minutes}:{seconds:.0f}s = {per_frame}s per frame")
-
-    def next_frame(self):
-        # finished
-        if self.frame_index >= len(self.values_a):
-            self.writer.save()
-            self.animation_timer.stop()
-            self.rendering = False
-            needed = time() - self.t1
-            min_ = int(needed // 60)
-            sec_ = needed - 60 * min_
-            per_frame = needed / int(self.input_n.text())
-            print(f"Total: {min_}m {sec_:.0f}s — Per frame: {per_frame:.2f}s")
-            return
-
-        # calc
-        a = self.values_a[self.frame_index]
-        b = self.values_b[self.frame_index]
-        res = self.animation_params["res"]
-        n = self.animation_params["n"]
-        if self.colors is None:
-            return
-        self.parent_.new_render(res, a, b, n, self.percentile, self.colors)
-        self.frame_index += 1

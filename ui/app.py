@@ -3,10 +3,10 @@ from PyQt6.QtWidgets import QSizePolicy
 from PyQt6.QtCore import Qt, QEvent
 from PyQt6.QtGui import QKeyEvent
 
-from script.simon import render_raw, to_img
+from attractor import render_frame, apply_colormap
 from ui.Canvas import MainCanvas, MultipleDisplays, DualDisplay
 from ui.ToolBar import Toolbar
-from script.api import ColorMap
+from attractor import ColorMap
 from ui.AnimationManagerWindow import MangerWindow
 
 from numpy.typing import NDArray
@@ -86,10 +86,10 @@ class MainWindow(QMainWindow):
         self.minicanvas.invert(boolean)
         self.minicanvas_.invert(boolean)
 
-    def new_render(self, res: int, a: float, b: float, n: int, percentile: float, colors: NDArray):
+    def new_render(self, res: int, a: float, b: float, n: int, percentile: float, colors: ColorMap):
         """Renders a single frame and displys it in the UI"""
-        h_normalized, _ = render_raw(res, a, b, n, percentile, 0)
-        im = to_img(h_normalized, colors)
+        h_normalized = render_frame(res, a, b, n, percentile)
+        # im = apply_colormap(h_normalized, colors)
         # self.canvas.display_image(im)
         self.canvas.change_image(h_normalized, 0)
         self.canvas.change_image(h_normalized, 1)
@@ -100,8 +100,7 @@ class MainWindow(QMainWindow):
         for i in range(self.minicanvas.displays):
             self.minicanvas.change_image(h_normalized, i)
 
-        if self.toolbar.rendering:
-            self.toolbar.writer.add_frame(im)
+        print("show main")
         self.toolbar.update_display(self.toolbar.frame_index, a, b)
         return h_normalized
 

@@ -3,3 +3,4 @@ pyqt6
 numpy
 numba
 opencv-python
+attractor-tools

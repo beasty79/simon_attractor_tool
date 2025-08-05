@@ -3,13 +3,10 @@ from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 from PyQt6.QtWidgets import QSizePolicy
 from matplotlib.figure import Figure
 from numpy.typing import NDArray
-from PyQt6.QtCore import Qt, pyqtSignal, QTimer
-from script.api import ColorMap
-from PyQt6.QtGui import QResizeEvent
+from PyQt6.QtCore import Qt, pyqtSignal
+from attractor import ColorMap, apply_colormap
 import numpy as np
 import matplotlib.pyplot as plt
-from dataclasses import dataclass
-from script.simon import to_img
 
 
 def get_colors(cmap: str) -> NDArray:
@@ -82,7 +79,7 @@ class MultipleDisplays(QWidget):
     def change_image(self, raw: NDArray, display_index: int):
         """keeps normalized img [0-1] in memory for further changes"""
         cmap = self.colormaps[display_index]
-        img = to_img(raw, cmap.get())
+        img = apply_colormap(raw, cmap)
         self.display(index=display_index, img=img)
         self.imgs[display_index] = raw
 
@@ -115,14 +112,14 @@ class MultipleDisplays(QWidget):
             return
 
 
-        im = to_img(h, self.colormaps[index].get())
+        im = apply_colormap(h, self.colormaps[index])
         self.canvase[index].display_image(im)
 
     def update_image(self, index: int):
         h = self.imgs[index]
         if h is None:
             return
-        im = to_img(h, self.colormaps[index].get())
+        im = apply_colormap(h, self.colormaps[index])
         canvas = self.canvase[index]
         canvas.display_image(im)
 
@@ -131,6 +128,9 @@ class MultipleDisplays(QWidget):
             h = self.height()
             new_w = round(h / 4)
             self.resize(new_w, h)
+
+    def __iter__(self):
+        return iter(self.canvase)
 
 class DualDisplay(MultipleDisplays):
     def __init__(self, parent: QWidget | None, colormaps: list[ColorMap] = 4 * [ColorMap("cividis")]) -> None:
