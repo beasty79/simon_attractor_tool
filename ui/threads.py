@@ -1,6 +1,24 @@
-from PyQt6.QtCore import QThread, pyqtSignal
+from PyQt6.QtCore import QThread, pyqtSignal, QObject
 from attractor import Performance_Renderer, ColorMap
 from time import time
+
+
+class RendererRunner(QObject):
+    finished = pyqtSignal(float, int)
+    progress = pyqtSignal(int)
+
+    def __init__(self, renderer: Performance_Renderer):
+        super().__init__()
+        self.renderer = renderer
+        self.renderer.addHook(self.progress)
+
+    def run(self, fname: str, verbose_image: bool = False):
+        from time import time
+        t1 = time()
+        self.renderer.start_render_process(fname, verbose_image=verbose_image)
+        elapsed = time() - t1
+        self.finished.emit(elapsed, self.renderer.frames)
+
 
 class RenderWorker(QThread):
     finished = pyqtSignal(float, int)

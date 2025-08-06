@@ -16,30 +16,33 @@ import matplotlib.pyplot as plt
 from time import time
 import numpy as np
 from ui.threads import RenderWorker
+from dataclasses import dataclass
 
 # cmap
 PATH_CACHE = "./data/animations.json"
-top_colormaps = plt.colormaps()
-# top_colormaps = [
-#     'viridis', 'gnuplot','plasma','inferno','magma','cividis', 'terrain',
-#     'turbo','coolwarm','Spectral','RdYlBu','RdYlGn','PiYG',
-#     'PRGn', 'BrBG', 'PuOr', 'Set1', 'Set2', 'Set3', 'Paired', 'Pastel1', 'Pastel2', 'tab10', 'tab20', 'cubehelix', 'nipy_spectral',
-#     'twilight', 'twilight_shifted', 'ocean'
-# ]
+
+@dataclass
+class Frame:
+    a: float
+    b: float
+    iterations: int
+    color: ColorMap
+    percentile: float
+    resolution: int
+
 
 class Toolbar(QWidget):
     def __init__(self, parent):
         super().__init__(parent)
         self.parent_: "MainWindow" = parent
 
-        self.setFixedWidth(250)
-        self.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Expanding)
-
+        # debounce render
         self.wait_timer = QTimer(self)
         self.wait_timer.setInterval(500)
         self.wait_timer.setSingleShot(True)
         self.wait_timer.timeout.connect(self.render_single_frame)
 
+        # debounce render
         self.debounce_slider_timer = QTimer(self)
         self.debounce_slider_timer.setInterval(500)
         self.debounce_slider_timer.setSingleShot(True)
@@ -48,23 +51,28 @@ class Toolbar(QWidget):
         self.rendering = False
         self.max_frames = 0
 
-        # Animation state
-        self.frame_index = 0
-        self.values_a = []
-        self.values_b = []
-        self.animation_params = {}
-        self.colors: NDArray | None = None
-        self.renderer = None
-        self.h_normalized = None
         self.libary = Libary()
         self.libary.load_file(PATH_CACHE)
         self.init_ui()
         self.update_render()
         self.update_time()
 
+    @property
+    def currentFrame(self) -> Frame:
+        return Frame(
+            a=self.a,
+            b=self.b,
+            iterations=self.iterations,
+            color=self.colormap,
+            percentile=self.percentile,
+            resolution=self.resolution
+        )
+
     def init_ui(self):
         layout = QVBoxLayout()
         layout.setContentsMargins(10, 10, 10, 10)
+        self.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Expanding)
+        self.setFixedWidth(250)
         layout.setSpacing(10)
 
         float_validator = QRegularExpressionValidator(QRegularExpression(r"^[+-]?\d+\.\d+$"))
@@ -98,7 +106,7 @@ class Toolbar(QWidget):
 
         # colormap
         self.cmap_box = QComboBox(self)
-        self.cmap_box.addItems(top_colormaps)
+        self.cmap_box.addItems(plt.colormaps())
         self.cmap_box.currentTextChanged.connect(lambda: self.cmap_change())
         layout.addWidget(self.cmap_box)
 
@@ -344,11 +352,7 @@ class Toolbar(QWidget):
             self._from_b.setText(str(preset.origin.b))
             self._to_b.setText(str(preset.end.b))
 
-            # self.input_a.setText(str(preset.origin.a))
-            # self.blockSignals(False)
-            # self.input_b.setText(str(preset.origin.b))
             dual_display: DualDisplay = self.parent_.canvas
-
             dual_display.setColormap(self.colormap, 0, update=False)
             dual_display.setColormap(self.colormap, 1, update=False)
 
@@ -394,7 +398,6 @@ class Toolbar(QWidget):
             self.wait_timer.stop()
         self.wait_timer.start()
 
-
     def get_colors(self, cmap=None) -> NDArray:
         if cmap is not None:
             color_map = plt.get_cmap(cmap)
@@ -413,20 +416,10 @@ class Toolbar(QWidget):
         self.parent_.minicanvas.invert(self.invert)
         self.parent_.minicanvas_.invert(self.invert)
 
-
     def render_single_frame(self):
-        print("render frame")
         t1 = time()
         QApplication.setOverrideCursor(Qt.CursorShape.BusyCursor)
-        colors = self.get_colors()
-        if self.invert:
-            colors = colors[::-1]
-        try:
-            self.h_normalized = self.parent_.new_render(self.resolution, self.a, self.b, self.iterations, colors=self.colormap, percentile=self.percentile)
-        except ValueError as e:
-            raise e
-            return
-        print("fin")
+        self.h_normalized = self.parent_.new_render(self.resolution, self.a, self.b, self.iterations, self.percentile)
         QApplication.restoreOverrideCursor()
         time_needed = time() - t1
         self.last_frame_sec.setText(f"Last Rendered Frame took {time_needed:.2f}s")
@@ -438,22 +431,28 @@ class Toolbar(QWidget):
             b_1 = float(self._from_b.text())
             b_2 = float(self._to_b.text())
             frames = int(self.frames.text())
-            res = int(self.input_res.text())
-            n = int(self.input_n.text())
             fps = int(self.fps_input.text())
-            percentile = float(self.input_percentile.text())
         except Exception as e:
             print("Invalid input:", e)
             return
 
-        cmap_name = self.cmap_box.currentText()
         self.rendering = True
         fname = get_save_filename(self)
 
-        self.values_a = np.linspace(a_1, a_2, frames)
-        self.values_b = np.linspace(b_1, b_2, frames)
+        values_a = np.linspace(a_1, a_2, frames)
+        values_b = np.linspace(b_1, b_2, frames)
 
-        self.worker = RenderWorker(self.values_a, self.values_b, fname, fps, cmap_name, res, n, percentile, invert=self.invert_checkbox.isChecked())
+        self.worker = RenderWorker(
+            values_a,
+            values_b,
+            fname,
+            fps,
+            self.colormap.name,
+            self.resolution,
+            self.iterations,
+            self.percentile,
+            invert=self.invert_checkbox.isChecked()
+        )
         self.worker.progress.connect(lambda x: self.update_display(x, 0, 0))
         self.worker.finished.connect(self.on_render_done)
         self.worker.start()

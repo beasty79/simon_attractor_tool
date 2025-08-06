@@ -86,11 +86,9 @@ class MainWindow(QMainWindow):
         self.minicanvas.invert(boolean)
         self.minicanvas_.invert(boolean)
 
-    def new_render(self, res: int, a: float, b: float, n: int, percentile: float, colors: ColorMap):
+    def new_render(self, res: int, a: float, b: float, n: int, percentile: float):
         """Renders a single frame and displys it in the UI"""
         h_normalized = render_frame(res, a, b, n, percentile)
-        # im = apply_colormap(h_normalized, colors)
-        # self.canvas.display_image(im)
         self.canvas.change_image(h_normalized, 0)
         self.canvas.change_image(h_normalized, 1)
 
@@ -100,8 +98,6 @@ class MainWindow(QMainWindow):
         for i in range(self.minicanvas.displays):
             self.minicanvas.change_image(h_normalized, i)
 
-        print("show main")
-        self.toolbar.update_display(self.toolbar.frame_index, a, b)
         return h_normalized
 
     def generate_infodump(self, fpath: str, a0, a1, b0, b1, n, cmap_name):
